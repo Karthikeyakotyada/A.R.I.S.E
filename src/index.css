@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900;
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  #root {
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-xl
+           text-white font-semibold text-sm
+           bg-primary-600 hover:bg-primary-700
+           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500
+           transition-all duration-200 ease-in-out
+           disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+
+  .input-field {
+    @apply block w-full px-4 py-3 text-sm
+           border border-slate-200 rounded-xl
+           bg-white text-slate-900 placeholder-slate-400
+           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           transition-all duration-200;
+  }
+
+  .input-field-error {
+    @apply border-red-400 focus:ring-red-400;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-slate-700 mb-1.5;
+  }
+
+  .auth-card {
+    @apply bg-white rounded-2xl shadow-xl shadow-slate-200/60 p-8 border border-slate-100;
+  }
+
+  .alert-error {
+    @apply flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm;
+  }
+
+  .alert-success {
+    @apply flex items-start gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Background mesh for auth pages */
+.auth-bg {
+  background-color: #eff6ff;
+  background-image:
+    radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(20, 184, 166, 0.08) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(37, 99, 235, 0.05) 0px, transparent 50%);
+  min-height: 100vh;
+}
