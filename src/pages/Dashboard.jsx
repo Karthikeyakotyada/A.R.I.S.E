@@ -1,20 +1,21 @@
+import { useState, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { useNavigate } from 'react-router-dom'
-
-const stats = [
-  { label: 'Reports Analyzed', value: '—', icon: '📊' },
-  { label: 'AI Insights', value: '—', icon: '🧠' },
-  { label: 'Health Score', value: '—', icon: '❤️' },
-]
+import { useNavigate, Link } from 'react-router-dom'
+import ReportList from '../components/ReportList'
 
 export default function Dashboard() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
+  const [reportCount, setReportCount] = useState(0)
 
   const handleSignOut = async () => {
     await signOut()
     navigate('/login', { replace: true })
   }
+
+  const handleCountChange = useCallback((count) => {
+    setReportCount(count)
+  }, [])
 
   const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'User'
   const initials = displayName
@@ -23,6 +24,12 @@ export default function Dashboard() {
     .join('')
     .toUpperCase()
     .slice(0, 2)
+
+  const stats = [
+    { label: 'Reports Uploaded', value: reportCount > 0 ? reportCount : '—', icon: '📊' },
+    { label: 'AI Insights', value: '—', icon: '🧠' },
+    { label: 'Health Score', value: '—', icon: '❤️' },
+  ]
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -45,8 +52,22 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* User + Sign out */}
-            <div className="flex items-center gap-3">
+            {/* Nav + User */}
+            <div className="flex items-center gap-2 sm:gap-3">
+
+              {/* Upload Report Nav Link */}
+              <Link
+                to="/upload"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-primary-600 to-secondary-500 text-white text-sm font-semibold shadow-sm shadow-primary-200/40 hover:from-primary-700 hover:to-secondary-600 transition-all duration-200"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                <span className="hidden sm:inline">Upload Report</span>
+                <span className="sm:hidden">Upload</span>
+              </Link>
+
+              {/* User info */}
               <div className="hidden sm:flex flex-col items-end">
                 <span className="text-sm font-medium text-slate-900">{displayName}</span>
                 <span className="text-xs text-slate-400">{user?.email}</span>
@@ -78,22 +99,32 @@ export default function Dashboard() {
               <p className="text-primary-100 text-sm font-medium mb-1">Welcome back 👋</p>
               <h2 className="text-2xl sm:text-3xl font-bold mb-2">{displayName}</h2>
               <p className="text-primary-100 text-sm max-w-md">
-                Your AI-powered health intelligence dashboard is ready. Upload reports to get instant insights.
+                Your AI-powered health intelligence dashboard is ready. Upload CBC reports to get instant insights.
               </p>
             </div>
-            <div className="hidden md:flex w-16 h-16 rounded-2xl bg-white/10 items-center justify-center text-3xl">
-              🏥
+            <div className="hidden md:flex flex-col items-center gap-3">
+              <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center text-3xl">
+                🏥
+              </div>
+              <Link
+                to="/upload"
+                className="px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-semibold transition-all duration-200 border border-white/20"
+              >
+                + Upload Report
+              </Link>
             </div>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
           {stats.map((stat) => (
             <div key={stat.label} className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-200">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-2xl">{stat.icon}</span>
-                <span className="text-xs text-slate-400 font-medium bg-slate-50 px-2 py-1 rounded-full">No data yet</span>
+                <span className="text-xs text-slate-400 font-medium bg-slate-50 px-2 py-1 rounded-full">
+                  {stat.label === 'Reports Uploaded' && reportCount > 0 ? 'Updated' : 'No data yet'}
+                </span>
               </div>
               <p className="text-2xl font-bold text-slate-800 mb-1">{stat.value}</p>
               <p className="text-sm text-slate-500">{stat.label}</p>
@@ -101,24 +132,9 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* Placeholder Action Panel */}
-        <div className="bg-white rounded-2xl border border-dashed border-slate-200 p-12 text-center shadow-sm">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-primary-50 flex items-center justify-center mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-primary-600">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-semibold text-slate-900 mb-2">Upload your first report</h3>
-          <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto">
-            ARISE will analyze your CBC and other health reports using AI to provide actionable insights.
-          </p>
-          <button className="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-xl font-semibold text-sm hover:bg-primary-700 transition-colors duration-200 shadow-sm shadow-primary-200">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-            </svg>
-            Upload Report
-          </button>
-        </div>
+        {/* My Reports Section */}
+        <ReportList onCountChange={handleCountChange} />
+
       </main>
     </div>
   )

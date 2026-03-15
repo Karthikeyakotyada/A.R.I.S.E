@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
+import UploadReport from './pages/UploadReport'
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -35,6 +36,7 @@ export default function App() {
       {/* Protected routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/upload" element={<UploadReport />} />
       </Route>
 
       {/* Default redirect */}
