@@ -1,10 +1,16 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import AppShell from './components/AppShell'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
 import UploadReport from './pages/UploadReport'
+import Reports from './pages/Reports'
+import ReportViewer from './pages/ReportViewer'
+import Health from './pages/Health'
+import HealthLogs from './pages/HealthLogs'
+import Profile from './pages/Profile'
 
 export default function App() {
   const { user, loading } = useAuth()
@@ -35,8 +41,15 @@ export default function App() {
 
       {/* Protected routes */}
       <Route element={<ProtectedRoute />}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/upload" element={<UploadReport />} />
+        <Route element={<AppShell />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/upload" element={<UploadReport />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/reports/:id" element={<ReportViewer />} />
+          <Route path="/health" element={<Health />} />
+          <Route path="/health/logs" element={<HealthLogs />} />
+          <Route path="/profile" element={<Profile />} />
+        </Route>
       </Route>
 
       {/* Default redirect */}

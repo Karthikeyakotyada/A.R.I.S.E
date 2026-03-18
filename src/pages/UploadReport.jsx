@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useAuth } from '../context/AuthContext'
+import { analyzeReport } from '../lib/cbcAnalyzer'
 
 const ACCEPTED_TYPES = {
   'application/pdf': 'PDF',
@@ -42,6 +43,7 @@ export default function UploadReport() {
   const [selectedFile, setSelectedFile] = useState(null)
   const [progress, setProgress] = useState(0)
   const [uploading, setUploading] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
 
@@ -144,11 +146,11 @@ export default function UploadReport() {
       const fileUrl = urlData.publicUrl
 
       // Insert record into reports table
-      const { error: dbError } = await supabase.from('reports').insert({
+      const { data, error: dbError } = await supabase.from('reports').insert({
         user_id: user.id,
         file_name: selectedFile.name,
         file_url: fileUrl,
-      })
+      }).select().single()
 
       if (dbError) {
         setError(dbError.message || 'Failed to save report record. Please try again.')
@@ -162,8 +164,29 @@ export default function UploadReport() {
       setSelectedFile(null)
       if (fileInputRef.current) fileInputRef.current.value = ''
 
-      // Redirect to dashboard after 2s
-      setTimeout(() => navigate('/dashboard'), 2000)
+      // Run AI analysis using the raw file (no storage fetch needed)
+      if (data) {
+        setAnalyzing(true)
+        try {
+          const result = await analyzeReport({
+            reportId: data.id,
+            fileBlob: selectedFile,   // pass raw File — Gemini reads it locally
+            filePath,                 // stored for re-analysis later
+            fileType: selectedFile.type,
+          })
+          if (!result.success) {
+            console.error('[ARISE] Analysis failed:', result.error)
+            // Non-fatal — user can re-analyze from the dashboard
+          }
+        } catch (analysisErr) {
+          console.error('[ARISE] Analysis exception:', analysisErr)
+        } finally {
+          setAnalyzing(false)
+        }
+      }
+
+      // Redirect to dashboard after a short pause
+      setTimeout(() => navigate('/dashboard'), 1000)
 
     } catch (err) {
       setError('An unexpected error occurred. Please try again.')
@@ -181,43 +204,11 @@ export default function UploadReport() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-
-      {/* Header */}
-      <header className="bg-white border-b border-slate-100 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-600 to-secondary-500 flex items-center justify-center shadow-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="white" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <span className="font-bold text-slate-900 text-lg tracking-tight">ARISE</span>
-                <span className="hidden sm:block text-xs text-slate-400 -mt-1">Upload CBC Report</span>
-              </div>
-            </div>
-
-            <Link
-              to="/dashboard"
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-slate-600 hover:text-primary-700 hover:bg-primary-50 text-sm font-medium transition-all duration-200"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-              </svg>
-              Back to Dashboard
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Main */}
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-12 animate-fade-in">
+    <div className="py-6 animate-fade-in">
+      <div className="max-w-2xl mx-auto">
 
         {/* Page Title */}
-        <div className="text-center mb-10">
+        <div className="text-center mb-8">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-primary-600 to-secondary-500 flex items-center justify-center shadow-lg shadow-primary-200/50 mb-5">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="white" className="w-8 h-8">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
@@ -237,9 +228,11 @@ export default function UploadReport() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
             </div>
-            <div>
+          <div>
               <p className="font-semibold text-emerald-800 text-sm">Report uploaded successfully!</p>
-              <p className="text-emerald-600 text-xs mt-0.5">Redirecting you to the dashboard…</p>
+              <p className="text-emerald-600 text-xs mt-0.5">
+                {analyzing ? '🔬 Running AI analysis...' : 'Redirecting you to the dashboard…'}
+              </p>
             </div>
           </div>
         )}
@@ -353,7 +346,7 @@ export default function UploadReport() {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:border-primary-300 hover:text-primary-700 hover:bg-primary-50/50 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl border border-slate-200 text-slate-700 text-sm font-semibold hover:border-primary-300 hover:text-primary-700 hover:bg-primary-50/50 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.99]"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
@@ -365,7 +358,7 @@ export default function UploadReport() {
               type="button"
               onClick={handleUpload}
               disabled={!selectedFile || uploading}
-              className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-600 to-secondary-500 text-white text-sm font-semibold shadow-sm shadow-primary-200/50 hover:from-primary-700 hover:to-secondary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
+              className="flex-1 flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-primary-600 to-secondary-500 text-white text-sm font-bold shadow-sm shadow-primary-200/50 hover:from-primary-700 hover:to-secondary-600 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 active:scale-[0.99]"
             >
               {uploading ? (
                 <>
@@ -396,7 +389,7 @@ export default function UploadReport() {
             <p className="text-secondary-600 text-xs">Your reports are encrypted and only accessible by you. ARISE uses Supabase secure storage to protect your health data.</p>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   )
 }

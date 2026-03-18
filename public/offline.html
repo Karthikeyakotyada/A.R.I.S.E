@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ARISE – Offline</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+        background: #0f172a;
+        color: #e5e7eb;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card {
+        background: #020617;
+        border-radius: 1.5rem;
+        padding: 2rem 2.25rem;
+        max-width: 360px;
+        width: 100%;
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.7);
+        text-align: center;
+      }
+      .icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 1.5rem;
+        margin: 0 auto 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at 0 0, #22d3ee, transparent 60%),
+                    radial-gradient(circle at 100% 0, #22c55e, transparent 60%),
+                    #0f172a;
+      }
+      .icon svg {
+        width: 28px;
+        height: 28px;
+        color: #eff6ff;
+      }
+      h1 {
+        font-size: 1.2rem;
+        margin-bottom: 0.5rem;
+      }
+      p {
+        font-size: 0.875rem;
+        color: #9ca3af;
+        margin: 0 0 1.25rem;
+      }
+      .hint {
+        font-size: 0.75rem;
+        color: #6b7280;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21L3.75 12 13.5 3M20.25 21L10.5 12 20.25 3" />
+        </svg>
+      </div>
+      <h1>You're offline</h1>
+      <p>ARISE needs an internet connection to load your latest reports and health logs.</p>
+      <p class="hint">Check your network connection and try again.</p>
+    </div>
+  </body>
+</html>
+
