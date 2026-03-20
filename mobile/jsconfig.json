@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true
+  },
+  "include": ["App.js", "index.js", "src/**/*.js"],
+  "exclude": ["node_modules", "**/node_modules/*"]
+}

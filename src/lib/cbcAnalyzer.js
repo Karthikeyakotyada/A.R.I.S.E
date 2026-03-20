@@ -59,18 +59,59 @@ async function fetchBase64ViaSignedUrl(filePath) {
 // GEMINI REST API — direct fetch, no SDK, full URL control
 // ──────────────────────────────────────────────────────────────
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1/models'
-const GEMINI_MODEL    = 'gemini-1.5-flash'
+const GEMINI_MODEL_CANDIDATES = [
+  import.meta.env.VITE_GEMINI_MODEL,
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+].filter(Boolean)
+
+function extractGeminiErrorMessage(payload) {
+  if (!payload) return ''
+  if (typeof payload === 'string') return payload
+  return payload?.error?.message || payload?.message || ''
+}
+
+function normalizeGeminiError(input) {
+  const message = String(input || '')
+  if (/api key|permission denied|unauthorized|forbidden/i.test(message)) {
+    return 'AI service authentication failed. Please verify the Gemini API key.'
+  }
+  if (/not found|not supported for generatecontent|models\//i.test(message)) {
+    return 'AI model unavailable. Please update to a supported Gemini model.'
+  }
+  return message
+}
 
 async function geminiGenerateContent(apiKey, requestBody) {
-  const url = `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(requestBody),
-  })
-  const json = await res.json()
-  if (!res.ok) throw new Error(JSON.stringify(json))
-  return json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  const models = [...new Set(GEMINI_MODEL_CANDIDATES)]
+  let lastError = null
+
+  for (const model of models) {
+    const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    })
+
+    const json = await res.json()
+    if (res.ok) {
+      return json.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    }
+
+    const apiMessage = normalizeGeminiError(extractGeminiErrorMessage(json))
+    const isModelUnavailable =
+      res.status === 404 || /model unavailable|not found|not supported for generatecontent/i.test(apiMessage)
+
+    if (isModelUnavailable) {
+      lastError = new Error(apiMessage)
+      continue
+    }
+
+    throw new Error(apiMessage || `Gemini error (${res.status})`)
+  }
+
+  throw new Error(lastError?.message || 'AI model unavailable. Please try again.')
 }
 
 async function extractCBCWithGemini(imageBase64, mimeType) {
@@ -298,7 +339,7 @@ export async function analyzeReport({ reportId, fileBlob, filePath, fileType }) 
 
       // If Gemini Vision failed, prepend the error reason to the summary
       if (geminiError) {
-        summary = `⚠️ Note: CBC value extraction encountered an error (${geminiError}). The summary below is based on limited data. ${summary}`
+        summary = `Note: CBC value extraction encountered an issue (${normalizeGeminiError(geminiError)}). The summary below is based on limited data. ${summary}`
       }
     }
 

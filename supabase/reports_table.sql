@@ -8,8 +8,37 @@ CREATE TABLE IF NOT EXISTS public.reports (
   user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   file_name text NOT NULL,
   file_url text NOT NULL,
+  analysis_status text NOT NULL DEFAULT 'uploaded',
   uploaded_at timestamptz DEFAULT now()
 );
+
+-- Ensure status column exists for older deployments.
+ALTER TABLE public.reports
+ADD COLUMN IF NOT EXISTS analysis_status text;
+
+-- Backfill and enforce lifecycle-safe status values.
+UPDATE public.reports
+SET analysis_status = 'uploaded'
+WHERE analysis_status IS NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'reports_analysis_status_check'
+  ) THEN
+    ALTER TABLE public.reports
+    ADD CONSTRAINT reports_analysis_status_check
+    CHECK (analysis_status IN ('uploaded', 'analysis_pending', 'analysis_complete', 'analysis_failed'));
+  END IF;
+END $$;
+
+ALTER TABLE public.reports
+ALTER COLUMN analysis_status SET DEFAULT 'uploaded';
+
+ALTER TABLE public.reports
+ALTER COLUMN analysis_status SET NOT NULL;
 
 -- ============================================================
 -- ENABLE ROW LEVEL SECURITY
