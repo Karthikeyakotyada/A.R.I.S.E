@@ -122,10 +122,20 @@ export default function DashboardScreen() {
   }
 
   const averages = calculateAverages()
+  const BLOOD_SUGAR_MODE =
+    String(process.env.EXPO_PUBLIC_BLOOD_SUGAR_MODE || 'random').toLowerCase() === 'fasting'
+      ? 'fasting'
+      : 'random'
 
   const toFiniteNumberOrNull = (value) => {
     const n = Number(value)
     return Number.isFinite(n) ? n : null
+  }
+
+  const parseBloodPressure = (rawValue) => {
+    const [sys, dia] = String(rawValue).split('/').map((part) => toFiniteNumberOrNull(part))
+    if (!Number.isFinite(sys) || !Number.isFinite(dia)) return null
+    return { systolic: sys, diastolic: dia }
   }
 
   const getMetricStatus = (key, rawValue) => {
@@ -136,44 +146,52 @@ export default function DashboardScreen() {
     if (key === 'hr') {
       const value = toFiniteNumberOrNull(rawValue)
       if (value === null) return null
-      if (value < 50) return { status: 'Critical', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
       if (value < 60) return { status: 'Low', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
       if (value <= 100) return { status: 'Normal', severity: 'normal', color: HEALTH_SEVERITY_COLORS.normal }
-      if (value <= 120) return { status: 'Elevated', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
       return { status: 'High', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
     }
 
     if (key === 'bp') {
-      const systolic = toFiniteNumberOrNull(String(rawValue).split('/')[0])
-      if (systolic === null) return null
-      if (systolic < 80) return { status: 'Critical', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
-      if (systolic < 90) return { status: 'Low', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
-      if (systolic <= 130) return { status: 'Normal', severity: 'normal', color: HEALTH_SEVERITY_COLORS.normal }
-      if (systolic <= 160) return { status: 'Elevated', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
-      if (systolic <= 180) return { status: 'High', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
-      return { status: 'Critical', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
+      const bp = parseBloodPressure(rawValue)
+      if (!bp) return null
+      if (bp.systolic >= 140 || bp.diastolic >= 90) {
+        return { status: 'High', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
+      }
+      if (
+        (bp.systolic >= 130 && bp.systolic <= 139) ||
+        (bp.diastolic >= 80 && bp.diastolic <= 89)
+      ) {
+        return { status: 'Stage 1', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
+      }
+      if (bp.systolic >= 120 && bp.systolic <= 129 && bp.diastolic < 80) {
+        return { status: 'Elevated', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
+      }
+      if (bp.systolic < 120 && bp.diastolic < 80) {
+        return { status: 'Normal', severity: 'normal', color: HEALTH_SEVERITY_COLORS.normal }
+      }
+      return { status: 'Elevated', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
     }
 
     if (key === 'sugar') {
       const value = toFiniteNumberOrNull(rawValue)
       if (value === null) return null
-      if (value < 54) return { status: 'Critical', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
-      if (value < 70) return { status: 'Low', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
-      if (value <= 140) return { status: 'Normal', severity: 'normal', color: HEALTH_SEVERITY_COLORS.normal }
-      if (value <= 180) return { status: 'Elevated', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
-      if (value <= 250) return { status: 'High', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
-      return { status: 'Critical', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
+      if (BLOOD_SUGAR_MODE === 'fasting') {
+        if (value < 100) return { status: 'Normal', severity: 'normal', color: HEALTH_SEVERITY_COLORS.normal }
+        if (value <= 125) return { status: 'Prediabetes', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
+        return { status: 'High', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
+      }
+
+      if (value < 140) return { status: 'Normal', severity: 'normal', color: HEALTH_SEVERITY_COLORS.normal }
+      return { status: 'High', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
     }
 
     if (key === 'temp') {
       const value = toFiniteNumberOrNull(rawValue)
       if (value === null) return null
-      if (value < 35.0) return { status: 'Critical', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
-      if (value < 36.1) return { status: 'Low', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
-      if (value <= 37.2) return { status: 'Normal', severity: 'normal', color: HEALTH_SEVERITY_COLORS.normal }
-      if (value <= 38.0) return { status: 'Elevated', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
-      if (value <= 39.0) return { status: 'High', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
-      return { status: 'Critical', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
+      if (value < 95.0) return { status: 'Low', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
+      if (value <= 99.0) return { status: 'Normal', severity: 'normal', color: HEALTH_SEVERITY_COLORS.normal }
+      if (value <= 100.4) return { status: 'Mild Fever', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
+      return { status: 'High', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
     }
 
     return null
@@ -191,14 +209,19 @@ export default function DashboardScreen() {
       return { status: 'Unknown', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
     }
 
-    if (metricStatuses.some((m) => m.status === 'Critical')) {
-      return { status: 'Critical', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
-    }
     if (metricStatuses.some((m) => m.status === 'High')) {
       return { status: 'High', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
     }
     if (
-      metricStatuses.some((m) => m.status === 'Elevated' || m.status === 'Low' || m.severity === 'warning')
+      metricStatuses.some(
+        (m) =>
+          m.status === 'Elevated' ||
+          m.status === 'Low' ||
+          m.status === 'Stage 1' ||
+          m.status === 'Prediabetes' ||
+          m.status === 'Mild Fever' ||
+          m.severity === 'warning'
+      )
     ) {
       return { status: 'Elevated', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
     }
@@ -212,8 +235,88 @@ export default function DashboardScreen() {
     { key: 'hr', emoji: '❤️', label: 'Heart Rate', value: averages.hr, unit: 'bpm' },
     { key: 'bp', emoji: '🩺', label: 'Blood Pressure', value: averages.bp, unit: 'mmHg' },
     { key: 'sugar', emoji: '🩸', label: 'Blood Sugar', value: averages.sugar, unit: 'mg/dL' },
-    { key: 'temp', emoji: '🌡️', label: 'Temperature', value: averages.temp, unit: '°C' },
+    { key: 'temp', emoji: '🌡️', label: 'Temperature', value: averages.temp, unit: '°F' },
   ]
+
+  function getSmartInsightMessage(key, status) {
+    if (key === 'hr') {
+      if (status === 'Normal') return 'Heart rate is within normal range today.'
+      if (status === 'Low') return 'Heart rate is lower than usual. Hydrate and monitor symptoms.'
+      if (status === 'High') return 'Heart rate is high. Consider medical guidance if this persists.'
+      return 'Heart rate data is limited right now.'
+    }
+
+    if (key === 'bp') {
+      if (status === 'Normal') return 'Blood pressure looks stable at the moment.'
+      if (status === 'Elevated') return 'Blood pressure is slightly elevated today.'
+      if (status === 'Stage 1') return 'Blood pressure is in Stage 1 range. Monitor daily and review lifestyle factors.'
+      if (status === 'High') return 'Blood pressure is high. Please monitor closely and seek care if needed.'
+      return 'Blood pressure data is limited right now.'
+    }
+
+    if (key === 'sugar') {
+      if (status === 'Normal') return 'Blood sugar is within your healthy range.'
+      if (status === 'Prediabetes') return 'Blood sugar is in prediabetes range. Consider diet and activity adjustments.'
+      if (status === 'High') return 'Blood sugar is high. Follow your care plan and monitor closely.'
+      return 'Blood sugar data is limited right now.'
+    }
+
+    if (key === 'temp') {
+      if (status === 'Normal') return 'Temperature is in a normal range.'
+      if (status === 'Low') return 'Temperature is lower than expected. Recheck in a warm setting.'
+      if (status === 'Mild Fever') return 'Temperature suggests a mild fever. Rest and stay hydrated.'
+      if (status === 'High') return 'Temperature is high. Consider resting and monitoring for fever symptoms.'
+      return 'Temperature data is limited right now.'
+    }
+
+    return 'Health trend data is being collected.'
+  }
+
+  function getInsightPriority(severity) {
+    if (severity === 'critical') return 0
+    if (severity === 'warning') return 1
+    return 2
+  }
+
+  const smartInsights = metricCards
+    .map((metric) => {
+      const insight = getMetricInsight(metric.key, metric.value)
+      const palette = getSeverityStyle(insight.severity)
+      const icon =
+        insight.severity === 'critical'
+          ? '⚠️'
+          : insight.severity === 'warning'
+            ? '💡'
+            : '✔'
+
+      return {
+        key: metric.key,
+        severity: insight.severity,
+        status: insight.status,
+        label: metric.label,
+        icon,
+        message: getSmartInsightMessage(metric.key, insight.status),
+        palette,
+      }
+    })
+    .filter((item) => item.status !== 'Not available')
+    .sort((a, b) => getInsightPriority(a.severity) - getInsightPriority(b.severity))
+    .slice(0, 3)
+
+  const displayInsights =
+    smartInsights.length > 0
+      ? smartInsights
+      : [
+          {
+            key: 'fallback',
+            severity: 'warning',
+            status: 'Not available',
+            label: 'Health Trends',
+            icon: '💡',
+            message: 'Add more health logs to unlock personalized smart insights.',
+            palette: getSeverityStyle('warning'),
+          },
+        ]
 
   function getMetricInsight(key, rawValue) {
     if (rawValue === '-' || rawValue === null || rawValue === undefined) {
@@ -225,39 +328,67 @@ export default function DashboardScreen() {
       }
     }
 
-    const value = Number(rawValue)
+    const statusResult = getMetricStatus(key, rawValue)
+    if (!statusResult) {
+      return {
+        tone: 'unknown',
+        status: 'Not available',
+        severity: 'warning',
+        hint: 'Add more logs to improve metric quality.',
+      }
+    }
+
+    const tone =
+      statusResult.severity === 'critical'
+        ? 'high'
+        : statusResult.severity === 'warning'
+          ? 'low'
+          : 'good'
+
     if (key === 'hr') {
-      if (value < 50) return { tone: 'low', status: 'Low', severity: 'critical', hint: 'Track hydration, rest, and symptoms like dizziness.' }
-      if (value < 60) return { tone: 'low', status: 'Low', severity: 'warning', hint: 'Track hydration, rest, and symptoms like dizziness.' }
-      if (value <= 100) return { tone: 'good', status: 'Normal', severity: 'normal', hint: 'Current trend looks healthy. Keep regular tracking.' }
-      if (value <= 120) return { tone: 'high', status: 'Elevated', severity: 'warning', hint: 'Retest after resting and consult a clinician if persistent.' }
-      return { tone: 'high', status: 'High', severity: 'critical', hint: 'Retest after resting and consult a clinician if persistent.' }
-    }
-
-    if (key === 'sugar') {
-      if (value < 70) return { tone: 'low', status: 'Low', severity: 'critical', hint: 'Consider immediate corrective intake and monitor closely.' }
-      if (value <= 140) return { tone: 'good', status: 'Normal', severity: 'normal', hint: 'Maintain your meal and activity routine.' }
-      if (value <= 180) return { tone: 'high', status: 'Elevated', severity: 'warning', hint: 'Review diet timing and follow-up with your doctor if frequent.' }
-      return { tone: 'high', status: 'High', severity: 'critical', hint: 'Review diet timing and follow-up with your doctor if frequent.' }
-    }
-
-    if (key === 'temp') {
-      if (value < 35.8) return { tone: 'low', status: 'Low', severity: 'critical', hint: 'Recheck in a warm environment and monitor symptoms.' }
-      if (value < 36.1) return { tone: 'low', status: 'Low', severity: 'warning', hint: 'Recheck in a warm environment and monitor symptoms.' }
-      if (value <= 37.2) return { tone: 'good', status: 'Normal', severity: 'normal', hint: 'No concern from this reading.' }
-      if (value <= 38.0) return { tone: 'high', status: 'Elevated', severity: 'warning', hint: 'Monitor for fever symptoms and hydrate well.' }
-      return { tone: 'high', status: 'High', severity: 'critical', hint: 'Monitor for fever symptoms and hydrate well.' }
+      if (statusResult.status === 'Low') {
+        return { tone, status: statusResult.status, severity: statusResult.severity, hint: 'Heart rate is below normal. Track dizziness and hydration.' }
+      }
+      if (statusResult.status === 'Normal') {
+        return { tone, status: statusResult.status, severity: statusResult.severity, hint: 'Heart rate is within healthy range.' }
+      }
+      return { tone: 'high', status: statusResult.status, severity: statusResult.severity, hint: 'Heart rate is above normal. Rest and recheck; consult if persistent.' }
     }
 
     if (key === 'bp') {
-      const systolic = Number(String(rawValue).split('/')[0])
-      if (!Number.isFinite(systolic)) {
-        return { tone: 'unknown', status: 'Not available', severity: 'warning', hint: 'Use a value like 120/80 for blood pressure logs.' }
+      if (statusResult.status === 'Normal') {
+        return { tone, status: statusResult.status, severity: statusResult.severity, hint: 'Blood pressure is currently in a normal range.' }
       }
-      if (systolic < 90) return { tone: 'low', status: 'Low', severity: 'warning', hint: 'Track dizziness/fatigue and consult if recurring.' }
-      if (systolic <= 130) return { tone: 'good', status: 'Normal', severity: 'normal', hint: 'Keep up healthy routine and regular checks.' }
-      if (systolic <= 160) return { tone: 'high', status: 'Elevated', severity: 'warning', hint: 'Track daily and seek medical guidance for sustained highs.' }
-      return { tone: 'high', status: 'High', severity: 'critical', hint: 'Track daily and seek medical guidance for sustained highs.' }
+      if (statusResult.status === 'Elevated') {
+        return { tone, status: statusResult.status, severity: statusResult.severity, hint: 'Blood pressure is elevated. Focus on hydration and low-sodium choices.' }
+      }
+      if (statusResult.status === 'Stage 1') {
+        return { tone, status: statusResult.status, severity: statusResult.severity, hint: 'Stage 1 blood pressure range detected. Monitor trends and consult if repeated.' }
+      }
+      return { tone: 'high', status: statusResult.status, severity: statusResult.severity, hint: 'High blood pressure range detected. Seek medical guidance if this continues.' }
+    }
+
+    if (key === 'sugar') {
+      if (statusResult.status === 'Normal') {
+        return { tone, status: statusResult.status, severity: statusResult.severity, hint: 'Blood sugar is in the expected range.' }
+      }
+      if (statusResult.status === 'Prediabetes') {
+        return { tone, status: statusResult.status, severity: statusResult.severity, hint: 'Prediabetes range detected. Consider routine follow-up and lifestyle adjustments.' }
+      }
+      return { tone: 'high', status: statusResult.status, severity: statusResult.severity, hint: 'Blood sugar is high. Follow your care plan and monitor closely.' }
+    }
+
+    if (key === 'temp') {
+      if (statusResult.status === 'Low') {
+        return { tone, status: statusResult.status, severity: statusResult.severity, hint: 'Temperature is low. Recheck in a warm environment.' }
+      }
+      if (statusResult.status === 'Normal') {
+        return { tone, status: statusResult.status, severity: statusResult.severity, hint: 'Temperature is in a normal range.' }
+      }
+      if (statusResult.status === 'Mild Fever') {
+        return { tone, status: statusResult.status, severity: statusResult.severity, hint: 'Mild fever range. Rest, hydrate, and monitor symptoms.' }
+      }
+      return { tone: 'high', status: statusResult.status, severity: statusResult.severity, hint: 'High temperature detected. Monitor closely and seek care if needed.' }
     }
 
     return {
@@ -300,11 +431,17 @@ export default function DashboardScreen() {
   const selectedMetricInsight = selectedMetricCard
     ? getMetricInsight(selectedMetricCard.key, selectedMetricCard.value)
     : null
+  const statusSeverityStyle = getSeverityStyle(healthStatus.severity)
+  const getLogTimeLabel = (value) => {
+    const date = new Date(value)
+    if (!Number.isFinite(date.getTime())) return '--:--'
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }
   const avatarInitial = (displayName || 'U').charAt(0).toUpperCase()
   const summaryCards = [
     { key: 'reports', icon: '📄', label: 'Reports', value: String(reportCount) },
     { key: 'logs', icon: '📈', label: 'Recent Logs', value: String(recentLogs.length) },
-    { key: 'status', icon: '🟢', label: 'Status', value: healthStatus.status },
+    { key: 'status', icon: '●', label: 'Status', value: healthStatus.status },
   ]
 
   useEffect(() => {
@@ -365,15 +502,56 @@ export default function DashboardScreen() {
         </View>
 
         <View style={styles.summaryCardsRow}>
-          {summaryCards.map((card) => (
-            <View key={card.key} style={styles.summaryCard}>
-              <View style={styles.summaryIconWrap}>
-                <Text style={styles.summaryIcon}>{card.icon}</Text>
+          {summaryCards.map((card) => {
+            const isStatusCard = card.key === 'status'
+            return (
+            <View
+              key={card.key}
+              style={[
+                styles.summaryCard,
+                isStatusCard && {
+                  backgroundColor: statusSeverityStyle.bg,
+                  borderColor: statusSeverityStyle.softBorder,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.summaryIconWrap,
+                  isStatusCard && {
+                    backgroundColor: '#ffffff',
+                    borderColor: statusSeverityStyle.softBorder,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.summaryIcon,
+                    isStatusCard && { color: statusSeverityStyle.value },
+                  ]}
+                >
+                  {card.icon}
+                </Text>
               </View>
-              <Text style={styles.summaryLabel}>{card.label}</Text>
-              <Text style={styles.summaryValue}>{card.value}</Text>
+              <Text
+                style={[
+                  styles.summaryLabel,
+                  isStatusCard && { color: statusSeverityStyle.text },
+                ]}
+              >
+                {card.label}
+              </Text>
+              <Text
+                style={[
+                  styles.summaryValue,
+                  isStatusCard && { color: statusSeverityStyle.value },
+                ]}
+              >
+                {card.value}
+              </Text>
             </View>
-          ))}
+            )
+          })}
         </View>
 
         {/* Key Metrics Grid */}
@@ -394,7 +572,10 @@ export default function DashboardScreen() {
                 key={metric.key}
                 style={({ pressed, hovered }) => [
                   styles.metricCard,
-                  { borderColor: severity.softBorder },
+                  {
+                    backgroundColor: severity.bg,
+                    borderColor: severity.softBorder,
+                  },
                   selectedMetric === metric.key && styles.metricCardActive,
                   selectedMetric === metric.key && {
                     backgroundColor: severity.bg,
@@ -403,19 +584,22 @@ export default function DashboardScreen() {
                   hovered && styles.metricCardHover,
                   (pressed || hovered) && styles.metricCardPressed,
                   {
-                    transform: [{ translateY: hovered ? -2 : 0 }, { scale: pressed ? 0.985 : 1 }],
+                    transform: [
+                      { translateY: hovered ? -3 : 0 },
+                      { scale: pressed ? 0.985 : hovered ? 1.01 : 1 },
+                    ],
                   },
                 ]}
                 onPress={() => setSelectedMetric(selectedMetric === metric.key ? null : metric.key)}
               >
                 <View style={styles.metricTopRow}>
                   <View style={styles.metricHeader}>
-                    <View style={[styles.metricIconBubble, { backgroundColor: severity.bg, borderColor: severity.border }]}>
+                    <View style={[styles.metricIconBubble, { backgroundColor: '#ffffff', borderColor: severity.softBorder }]}>
                       <Text style={styles.metricIcon}>{metric.emoji}</Text>
                     </View>
                     <Text style={styles.metricLabel}>{metric.label}</Text>
                   </View>
-                  <View style={[styles.metricStatusPill, { backgroundColor: severity.bg, borderColor: severity.border }]}>
+                  <View style={[styles.metricStatusPill, { backgroundColor: '#ffffff', borderColor: severity.softBorder }]}>
                     <Text style={[styles.metricStatusText, { color: severity.text }]}>{insight.status}</Text>
                   </View>
                 </View>
@@ -453,6 +637,42 @@ export default function DashboardScreen() {
           ) : null}
         </View>
 
+        <View style={styles.smartInsightsSection}>
+          <Text style={styles.smartInsightsTitle}>Smart Health Insights</Text>
+          <Text style={styles.smartInsightsHint}>Personalized highlights from your latest vitals.</Text>
+
+          <View style={styles.smartInsightsList}>
+            {displayInsights.map((insight) => (
+              <View
+                key={insight.key}
+                style={[
+                  styles.smartInsightCard,
+                  {
+                    backgroundColor: insight.palette.bg,
+                    borderColor: insight.palette.softBorder,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.smartInsightIconWrap,
+                    { borderColor: insight.palette.softBorder },
+                  ]}
+                >
+                  <Text style={styles.smartInsightIcon}>{insight.icon}</Text>
+                </View>
+
+                <View style={styles.smartInsightContent}>
+                  <Text style={[styles.smartInsightLabel, { color: insight.palette.text }]}>
+                    {insight.label}
+                  </Text>
+                  <Text style={styles.smartInsightText}>{insight.message}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
         {/* Recent Logs Section */}
         <View style={styles.recentLogsSection}>
           <View style={styles.sectionHeader}>
@@ -486,46 +706,51 @@ export default function DashboardScreen() {
                         hovered && styles.logCardHover,
                         pressed && styles.logCardPressed,
                         {
-                          transform: [{ translateY: hovered ? -1 : 0 }, { scale: pressed ? 0.995 : 1 }],
+                          transform: [{ translateY: hovered ? -2 : 0 }, { scale: pressed ? 0.992 : 1 }],
                         },
                       ]}
                     >
                       <View style={styles.logHeader}>
-                        <Text style={styles.logDate}>
-                          {formatDate(log.created_at)}
-                        </Text>
+                        <View style={styles.logDateWrap}>
+                          <Text style={styles.logDate}>{formatDate(log.created_at)}</Text>
+                          <Text style={styles.logTime}>{getLogTimeLabel(log.created_at)}</Text>
+                        </View>
                         <View style={styles.logStatusChip}>
                           <Text style={styles.logStatusText}>Logged</Text>
                         </View>
                       </View>
 
-                      <View style={styles.logMetrics}>
-                        <View style={styles.logMetric}>
-                          <Text style={styles.logMetricLabel}>HR</Text>
-                          <Text style={styles.logMetricValue}>
-                            {log.heart_rate ?? '-'}
-                          </Text>
+                      <View style={styles.logMetricsGrid}>
+                        <View style={styles.logMetricCell}>
+                          <Text style={styles.logMetricLabel}>Heart Rate</Text>
+                          <View style={styles.logMetricValueRow}>
+                            <Text style={styles.logMetricValue}>{log.heart_rate ?? '-'}</Text>
+                            <Text style={styles.logMetricUnit}>bpm</Text>
+                          </View>
                         </View>
 
-                        <View style={styles.logMetric}>
-                          <Text style={styles.logMetricLabel}>BP</Text>
-                          <Text style={styles.logMetricValue}>
-                            {log.blood_pressure ?? '-'}
-                          </Text>
+                        <View style={styles.logMetricCell}>
+                          <Text style={styles.logMetricLabel}>Blood Pressure</Text>
+                          <View style={styles.logMetricValueRow}>
+                            <Text style={styles.logMetricValue}>{log.blood_pressure ?? '-'}</Text>
+                            <Text style={styles.logMetricUnit}>mmHg</Text>
+                          </View>
                         </View>
 
-                        <View style={styles.logMetric}>
-                          <Text style={styles.logMetricLabel}>Sugar</Text>
-                          <Text style={styles.logMetricValue}>
-                            {log.blood_sugar ?? '-'}
-                          </Text>
+                        <View style={styles.logMetricCell}>
+                          <Text style={styles.logMetricLabel}>Blood Sugar</Text>
+                          <View style={styles.logMetricValueRow}>
+                            <Text style={styles.logMetricValue}>{log.blood_sugar ?? '-'}</Text>
+                            <Text style={styles.logMetricUnit}>mg/dL</Text>
+                          </View>
                         </View>
 
-                        <View style={styles.logMetric}>
-                          <Text style={styles.logMetricLabel}>Temp</Text>
-                          <Text style={styles.logMetricValue}>
-                            {log.temperature ?? '-'}
-                          </Text>
+                        <View style={styles.logMetricCell}>
+                          <Text style={styles.logMetricLabel}>Temperature</Text>
+                          <View style={styles.logMetricValueRow}>
+                            <Text style={styles.logMetricValue}>{log.temperature ?? '-'}</Text>
+                            <Text style={styles.logMetricUnit}>°F</Text>
+                          </View>
                         </View>
                       </View>
                     </Pressable>
@@ -703,14 +928,15 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 8,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
   },
   summaryIcon: {
     fontSize: 13,
+    color: '#64748b',
   },
   summaryLabel: {
     fontSize: 9,
@@ -734,36 +960,39 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#7b8a9d',
     marginTop: 2,
-    marginBottom: 8,
+    marginBottom: 10,
     fontWeight: '600',
   },
   metricsGrid: {
     display: 'none',
   },
   metricsRow: {
-    gap: 8,
-    paddingRight: 12,
+    gap: 12,
+    paddingRight: 16,
+    paddingBottom: 2,
   },
   metricCard: {
     width: Math.min(width * 0.42, 172),
     minWidth: 148,
-    backgroundColor: '#ffffff',
+    minHeight: 156,
+    backgroundColor: '#f8fafc',
     borderRadius: 18,
-    padding: 10,
-    borderWidth: 1.5,
+    padding: 12,
+    borderWidth: 1,
     borderColor: SOFT_BORDER_COLOR,
+    justifyContent: 'space-between',
     elevation: 2,
     ...INTERACTIVE_CARD_SHADOW,
   },
   metricCardHover: {
-    borderColor: '#bfd4ef',
+    elevation: 4,
+    ...METRIC_ACTIVE_SHADOW_STYLE,
   },
   metricCardPressed: {
-    opacity: 0.96,
+    opacity: 0.97,
   },
   metricCardActive: {
-    borderColor: '#1e5a4a',
-    backgroundColor: '#f0fdf9',
+    borderColor: '#9bc5bb',
     elevation: 4,
     ...METRIC_ACTIVE_SHADOW_STYLE,
   },
@@ -777,52 +1006,52 @@ const styles = StyleSheet.create({
   metricHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
     flex: 1,
   },
   metricIconBubble: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   metricIcon: {
-    fontSize: 14,
+    fontSize: 12,
   },
   metricLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
-    color: '#708198',
+    color: '#64748b',
   },
   metricStatusPill: {
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   metricStatusText: {
-    fontSize: 8,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    fontSize: 9,
+    fontWeight: '700',
   },
   metricValue: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '900',
     color: '#1e5a4a',
-    marginBottom: 2,
+    marginTop: 1,
+    marginBottom: 1,
   },
   metricUnit: {
-    fontSize: 9,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: '600',
     color: '#8fa0b5',
-    marginBottom: 2,
+    marginBottom: 3,
   },
   metricQuickStatus: {
     fontSize: 9,
     fontWeight: '600',
+    opacity: 0.9,
   },
   metricInsightCard: {
     marginTop: 8,
@@ -844,6 +1073,60 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#516174',
     lineHeight: 15,
+  },
+  smartInsightsSection: {
+    marginBottom: 14,
+  },
+  smartInsightsTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#0b1220',
+  },
+  smartInsightsHint: {
+    fontSize: 10,
+    color: '#7b8a9d',
+    marginTop: 2,
+    marginBottom: 10,
+    fontWeight: '600',
+  },
+  smartInsightsList: {
+    gap: 8,
+  },
+  smartInsightCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    ...PREMIUM_CARD_SHADOW,
+  },
+  smartInsightIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smartInsightIcon: {
+    fontSize: 13,
+  },
+  smartInsightContent: {
+    flex: 1,
+    gap: 2,
+  },
+  smartInsightLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  smartInsightText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '500',
+    lineHeight: 17,
   },
   statsSection: {
     flexDirection: 'row',
@@ -937,45 +1220,44 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   logsList: {
-    gap: 8,
+    gap: 12,
   },
   timelineRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    gap: 8,
+    gap: 10,
   },
   timelineRail: {
-    width: 16,
+    width: 18,
     alignItems: 'center',
     position: 'relative',
   },
   timelineDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: '#0f766e',
-    marginTop: 14,
+    marginTop: 16,
     borderWidth: 2,
-    borderColor: '#ccfbf1',
+    borderColor: '#d1fae5',
   },
   timelineLine: {
     position: 'absolute',
-    top: 26,
-    bottom: -14,
+    top: 28,
+    bottom: -16,
     width: 2,
-    backgroundColor: '#cbd5e1',
+    backgroundColor: '#dbe5ef',
   },
   logCard: {
     flex: 1,
     backgroundColor: '#ffffff',
     borderRadius: 18,
-    borderWidth: 1,
-    borderColor: SOFT_BORDER_COLOR,
-    padding: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     ...PREMIUM_CARD_SHADOW,
   },
   logCardHover: {
-    borderColor: '#c7d9ee',
+    ...METRIC_ACTIVE_SHADOW_STYLE,
   },
   logCardPressed: {
     opacity: 0.98,
@@ -984,49 +1266,74 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  logDateWrap: {
+    flex: 1,
   },
   logDate: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0b1220',
-  },
-  logStatusChip: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: '#ecfdf5',
-    borderWidth: 1,
-    borderColor: '#86efac',
-  },
-  logStatusText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#166534',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-  },
-  logMetrics: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  logMetric: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    borderRadius: 8,
-    padding: 8,
-    alignItems: 'center',
-  },
-  logMetricLabel: {
-    fontSize: 9,
-    fontWeight: '500',
-    color: '#7b8a9d',
-    marginBottom: 1,
-  },
-  logMetricValue: {
     fontSize: 14,
     fontWeight: '800',
     color: '#0b1220',
+  },
+  logTime: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#7b8a9d',
+    marginTop: 2,
+  },
+  logStatusChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  logStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#166534',
+  },
+  logMetricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    columnGap: 8,
+    rowGap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#edf2f7',
+    paddingTop: 10,
+  },
+  logMetricCell: {
+    width: '48%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 9,
+    borderWidth: 1,
+    borderColor: '#edf2f7',
+  },
+  logMetricLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#7b8a9d',
+    marginBottom: 4,
+  },
+  logMetricValueRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  logMetricValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0b1220',
+  },
+  logMetricUnit: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#8fa0b5',
+    marginBottom: 1,
   },
   footerSpacing: {
     height: 12,

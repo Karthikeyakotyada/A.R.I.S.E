@@ -6,6 +6,7 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
+  Pressable,
   Dimensions,
   ActivityIndicator,
   Animated,
@@ -40,8 +41,13 @@ const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 const USE_NATIVE_DRIVER = Platform.OS !== 'web'
 const UPLOAD_CARD_SHADOW_STYLE =
   Platform.OS === 'web'
-    ? { boxShadow: '0px 1px 4px rgba(0,0,0,0.05)' }
-    : {}
+    ? { boxShadow: '0px 20px 38px rgba(15,118,110,0.24), 0px 2px 0px rgba(16,185,129,0.24)' }
+    : {
+        shadowColor: '#0f766e',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.26,
+        shadowRadius: 22,
+      }
 
 const UPLOAD_BUTTON_SHADOW_STYLE =
   Platform.OS === 'web'
@@ -54,6 +60,33 @@ const UPLOAD_BUTTON_DISABLED_SHADOW_STYLE =
 const INFO_CARD_SHADOW_STYLE =
   Platform.OS === 'web'
     ? { boxShadow: '0px 1px 2px rgba(0,0,0,0.05)' }
+    : {}
+
+const UPLOAD_HOVER_GLOW_STYLE =
+  Platform.OS === 'web'
+    ? { boxShadow: '0px 22px 40px rgba(16,185,129,0.24), 0px 0px 0px 1.5px rgba(110,231,183,0.72)' }
+    : {
+        shadowOpacity: 0.3,
+        shadowRadius: 24,
+      }
+
+const UPLOAD_ICON_SHADOW_STYLE =
+  Platform.OS === 'web'
+    ? { boxShadow: '0px 14px 26px rgba(15,118,110,0.30), 0px 0px 0px 1px rgba(110,231,183,0.9)' }
+    : {
+        shadowColor: '#16a34a',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.34,
+        shadowRadius: 18,
+      }
+
+const UPLOAD_INTERACTION_TRANSITION_STYLE =
+  Platform.OS === 'web'
+    ? {
+        transitionProperty: 'transform, box-shadow, background-color, border-color',
+        transitionDuration: '180ms',
+        transitionTimingFunction: 'ease-out',
+      }
     : {}
 
 function hasDetectedValues(analysis) {
@@ -341,53 +374,55 @@ export default function UploadReportScreen({ navigation }) {
 
         {/* Upload Area */}
         <View style={styles.uploadSection}>
-          <Animated.View
-            style={[
+          <Pressable
+            onPress={pickFile}
+            disabled={uploading || analyzing}
+            style={({ pressed, hovered }) => [
               styles.uploadCard,
-              { transform: [{ scale: scaleAnim }] },
+              hovered && styles.uploadCardHovered,
+              pressed && styles.uploadCardPressed,
+              selectedFile && styles.uploadCardActive,
+              (uploading || analyzing) && styles.uploadCardDisabled,
+              {
+                transform: [{ scale: pressed ? 0.978 : hovered ? 1.015 : 1 }],
+              },
             ]}
           >
-            {!selectedFile ? (
-              <View style={styles.uploadPlaceholder}>
-                <Text style={styles.uploadIcon}>📄</Text>
-                <Text style={styles.uploadTitle}>No PDF Selected</Text>
-                <Text style={styles.uploadSubtitle}>
-                  Choose a clear patient CBC report PDF to get started
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.filePreview}>
-                <View style={styles.fileIconContainer}>
-                  <Text style={styles.fileIcon}>📕</Text>
-                </View>
-                <View style={styles.fileInfo}>
-                  <Text style={styles.fileName} numberOfLines={1}>
-                    {selectedFile.name}
-                  </Text>
-                  <Text style={styles.fileDetails}>
-                    {fileSize} KB • {ACCEPTED_TYPES[selectedFile.mimeType]}
+            <View style={styles.uploadCardGlowLayer} pointerEvents="none" />
+            <View style={styles.uploadCardInnerHighlight} pointerEvents="none" />
+            <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+              {!selectedFile ? (
+                <View style={styles.uploadPlaceholder}>
+                  <View style={styles.uploadIconWrap}>
+                    <Text style={styles.uploadIcon}>📤</Text>
+                  </View>
+                  <Text style={styles.uploadTitle}>Tap to upload your CBC report</Text>
+                  <Text style={styles.uploadSubtitle}>Tap anywhere to select PDF</Text>
+                  <Text style={styles.uploadSupportText}>
+                    PDF only, up to {MAX_SIZE_MB}MB
                   </Text>
                 </View>
-                <View style={styles.fileCheck}>
-                  <Text style={styles.checkIcon}>✓</Text>
+              ) : (
+                <View style={styles.filePreview}>
+                  <View style={styles.fileIconContainer}>
+                    <Text style={styles.fileIcon}>📕</Text>
+                  </View>
+                  <View style={styles.fileInfo}>
+                    <Text style={styles.fileName} numberOfLines={1}>
+                      {selectedFile.name}
+                    </Text>
+                    <Text style={styles.fileDetails}>
+                      {fileSize} KB • {ACCEPTED_TYPES[selectedFile.mimeType]}
+                    </Text>
+                    <Text style={styles.fileReplaceHint}>Tap anywhere to select PDF</Text>
+                  </View>
+                  <View style={styles.fileCheck}>
+                    <Text style={styles.checkIcon}>✓</Text>
+                  </View>
                 </View>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={[
-                styles.selectButton,
-                (uploading || analyzing) && styles.selectButtonDisabled,
-              ]}
-              onPress={pickFile}
-              disabled={uploading || analyzing}
-            >
-              <Text style={styles.selectButtonIcon}>📁</Text>
-              <Text style={styles.selectButtonText}>
-                {selectedFile ? 'Choose Another PDF' : 'Choose PDF'}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
+              )}
+            </Animated.View>
+          </Pressable>
         </View>
 
         {/* Upload Progress */}
@@ -458,6 +493,7 @@ export default function UploadReportScreen({ navigation }) {
           <TouchableOpacity
             style={[
               styles.uploadButton,
+              selectedFile && styles.uploadButtonEnabled,
               !isReady && styles.uploadButtonDisabled,
             ]}
             onPress={handleUpload}
@@ -615,35 +651,91 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   uploadCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
+    backgroundColor: '#e8f6ee',
+    borderRadius: 18,
+    borderWidth: 2.8,
+    borderColor: '#69c997',
     borderStyle: 'dashed',
-    padding: 24,
-    gap: 16,
-    elevation: 2,
+    paddingVertical: 20,
+    paddingHorizontal: 22,
+    marginBottom: 10,
+    elevation: 7,
+    position: 'relative',
+    overflow: 'hidden',
     ...UPLOAD_CARD_SHADOW_STYLE,
+    ...UPLOAD_INTERACTION_TRANSITION_STYLE,
+  },
+  uploadCardGlowLayer: {
+    position: 'absolute',
+    top: -28,
+    right: -16,
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    backgroundColor: 'rgba(134,239,172,0.28)',
+  },
+  uploadCardInnerHighlight: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 56,
+    backgroundColor: 'rgba(255,255,255,0.56)',
+  },
+  uploadCardHovered: {
+    backgroundColor: '#dff3e7',
+    borderColor: '#4fbe83',
+    ...UPLOAD_HOVER_GLOW_STYLE,
+  },
+  uploadCardPressed: {
+    backgroundColor: '#d7efdf',
+    borderColor: '#46ad73',
+  },
+  uploadCardActive: {
+    backgroundColor: '#daf2e3',
+    borderColor: '#3ea967',
+  },
+  uploadCardDisabled: {
+    opacity: 0.7,
   },
   uploadPlaceholder: {
     alignItems: 'center',
-    paddingVertical: 20,
+    justifyContent: 'center',
+    paddingVertical: 16,
+  },
+  uploadIconWrap: {
+    width: 112,
+    height: 112,
+    borderRadius: 30,
+    backgroundColor: '#c9eedb',
+    borderWidth: 1.4,
+    borderColor: '#69c995',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 14,
+    ...UPLOAD_ICON_SHADOW_STYLE,
   },
   uploadIcon: {
-    fontSize: 56,
-    marginBottom: 12,
+    fontSize: 42,
   },
   uploadTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '900',
     color: '#0f172a',
-    marginBottom: 4,
+    marginBottom: 5,
   },
   uploadSubtitle: {
     fontSize: 13,
     color: '#64748b',
     textAlign: 'center',
     lineHeight: 18,
+    marginBottom: 6,
+    opacity: 0.56,
+  },
+  uploadSupportText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '600',
   },
   filePreview: {
     flexDirection: 'row',
@@ -678,6 +770,12 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '500',
   },
+  fileReplaceHint: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#1e5a4a',
+    fontWeight: '600',
+  },
   fileCheck: {
     width: 32,
     height: 32,
@@ -690,29 +788,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#fff',
     fontWeight: '800',
-  },
-  selectButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1.5,
-    borderColor: '#cbd5e0',
-    gap: 8,
-  },
-  selectButtonDisabled: {
-    backgroundColor: '#e2e8f0',
-    borderColor: '#cbd5e0',
-  },
-  selectButtonIcon: {
-    fontSize: 18,
-  },
-  selectButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1e5a4a',
   },
   progressSection: {
     backgroundColor: '#ffffff',
@@ -798,15 +873,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 56,
+    height: 62,
     borderRadius: 12,
     backgroundColor: '#1e5a4a',
     elevation: 4,
     ...UPLOAD_BUTTON_SHADOW_STYLE,
     gap: 8,
   },
+  uploadButtonEnabled: {
+    backgroundColor: '#1e5a4a',
+    elevation: 6,
+    ...UPLOAD_HOVER_GLOW_STYLE,
+  },
   uploadButtonDisabled: {
-    backgroundColor: '#cbd5e0',
+    backgroundColor: '#b8c1cc',
     elevation: 0,
     ...UPLOAD_BUTTON_DISABLED_SHADOW_STYLE,
   },
@@ -814,21 +894,23 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   uploadButtonText: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '900',
     color: '#fff',
     letterSpacing: 0.3,
   },
   infoSection: {
     gap: 12,
+    marginTop: 10,
     marginBottom: 28,
   },
   infoCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f7faf9',
     borderRadius: 12,
-    padding: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 13,
     borderLeftWidth: 4,
-    borderLeftColor: '#1e5a4a',
+    borderLeftColor: '#5a8d7f',
     elevation: 1,
     ...INFO_CARD_SHADOW_STYLE,
   },
@@ -839,17 +921,17 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   infoCardIcon: {
-    fontSize: 18,
+    fontSize: 16,
   },
   infoCardTitle: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
+    fontWeight: '600',
+    color: '#334155',
   },
   infoCardText: {
     fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500',
+    color: '#6b7280',
+    fontWeight: '400',
     lineHeight: 16,
   },
   footer: {
