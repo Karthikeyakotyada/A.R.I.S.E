@@ -18,7 +18,7 @@ function StatusBadge({ status }) {
   const meta = REPORT_STATUS_META[status] || REPORT_STATUS_META.uploaded
   const colors =
     meta.tone === 'success'
-      ? { bg: '#dcfce7', border: '#86efac', text: '#1de5e9' }
+      ? { bg: '#dcfce7', border: '#86efac', text: '#166534' }
       : meta.tone === 'error'
         ? { bg: '#fee2e2', border: '#fca5a5', text: '#991b1b' }
         : meta.tone === 'warning'
@@ -40,6 +40,8 @@ export default function ReportsScreen({ navigation }) {
   const [loading, setLoading] = useState(false)
   const [banner, setBanner] = useState(null)
   const [online, setOnline] = useState(true)
+
+  const reportCountLabel = reports.length === 1 ? '1 report available' : `${reports.length} reports available`
 
   const fetchReports = useCallback(async () => {
     if (!user) return
@@ -181,8 +183,12 @@ export default function ReportsScreen({ navigation }) {
       <PageHeader
         eyebrow="Reports"
         title="My Report Library"
-        subtitle={loading ? 'Loading your reports...' : `${reports.length} report(s) available`}
+        subtitle={loading ? 'Loading your reports...' : reportCountLabel}
       />
+
+      <Pressable style={styles.historyBtn} onPress={() => navigation.navigate('AnalysisHistory')}>
+        <Text style={styles.historyBtnText}>Open Analysis History</Text>
+      </Pressable>
 
       {!online ? <InlineBanner tone="warning" message="You're offline or connection is unstable" /> : null}
       {banner ? <InlineBanner tone={banner.tone} message={banner.message} /> : null}
@@ -206,15 +212,15 @@ export default function ReportsScreen({ navigation }) {
               </Pressable>
               <View style={styles.row}>
                 <Pressable style={styles.viewBtn} onPress={() => navigation.navigate('ReportViewer', { reportId: item.id })}>
-                  <Text style={styles.viewBtnText}>View</Text>
+                  <Text style={styles.viewBtnText}>Open</Text>
                 </Pressable>
                 {item.resolvedStatus === REPORT_ANALYSIS_STATUS.FAILED ? (
                   <Pressable style={styles.retryBtn} onPress={() => handleRetry(item)}>
-                    <Text style={styles.retryBtnText}>Retry</Text>
+                    <Text style={styles.retryBtnText}>Re-analyze</Text>
                   </Pressable>
                 ) : null}
                 <Pressable style={styles.deleteBtn} onPress={() => handleDelete(item)}>
-                  <Text style={styles.deleteBtnText}>Delete</Text>
+                  <Text style={styles.deleteBtnText}>Remove</Text>
                 </Pressable>
               </View>
             </Card>
@@ -224,7 +230,7 @@ export default function ReportsScreen({ navigation }) {
           <Card>
             <EmptyState
               title="No reports uploaded"
-              subtitle="Upload your first CBC report from the Upload tab. After upload, ARISE will track analysis status automatically."
+              subtitle="Upload your first CBC PDF from the Upload tab. ARISE will analyze it and track status automatically."
             />
           </Card>
         }
@@ -302,5 +308,20 @@ const styles = StyleSheet.create({
   deleteBtnText: {
     fontWeight: '700',
     color: '#fff',
+  },
+  historyBtn: {
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    backgroundColor: '#ecfeff',
+    borderRadius: 12,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  historyBtnText: {
+    color: '#0f766e',
+    fontWeight: '800',
+    fontSize: 13,
   },
 })

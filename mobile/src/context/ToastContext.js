@@ -1,5 +1,11 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
-import { Animated, StyleSheet, Text, View } from 'react-native'
+import { Animated, Platform, StyleSheet, Text, View } from 'react-native'
+
+const USE_NATIVE_DRIVER = Platform.OS !== 'web'
+const TOAST_SHADOW_STYLE =
+  Platform.OS === 'web'
+    ? { boxShadow: '0px 3px 8px rgba(0,0,0,0.25)' }
+    : {}
 
 const ToastContext = createContext({ showToast: () => {} })
 
@@ -14,12 +20,12 @@ export function ToastProvider({ children }) {
       Animated.timing(opacity, {
         toValue: 0,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
         toValue: -12,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => setToast(null))
   }, [opacity, translateY])
@@ -35,12 +41,12 @@ export function ToastProvider({ children }) {
       Animated.timing(opacity, {
         toValue: 1,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
         toValue: 0,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start()
 
@@ -64,7 +70,7 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={value}>
       {children}
       {toast ? (
-        <View pointerEvents="none" style={styles.host}>
+        <View style={styles.host}>
           <Animated.View style={[styles.toast, { backgroundColor: bgColor, opacity, transform: [{ translateY }] }]}>
             <Text style={styles.text}>{toast.message}</Text>
           </Animated.View>
@@ -85,6 +91,7 @@ export function useToast() {
 const styles = StyleSheet.create({
   host: {
     position: 'absolute',
+    pointerEvents: 'none',
     top: 56,
     left: 14,
     right: 14,
@@ -94,10 +101,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 11,
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    ...TOAST_SHADOW_STYLE,
     elevation: 5,
   },
   text: {

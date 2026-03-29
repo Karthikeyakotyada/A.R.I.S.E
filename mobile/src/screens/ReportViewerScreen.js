@@ -16,15 +16,33 @@ import AnimatedListItem from '../components/AnimatedListItem'
 import InlineBanner from '../components/InlineBanner'
 import MedicalDisclaimer from '../components/MedicalDisclaimer'
 
+function hasDetectedValues(analysis) {
+  if (!analysis) return false
+  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets']
+  return fields.some((field) => {
+    const value = Number(analysis[field])
+    return Number.isFinite(value) && value > 0
+  })
+}
+
 function Metric({ label, value, field }) {
   const status = value !== null && value !== undefined ? getStatusForValue(value, field) : 'unknown'
   const color = status === 'normal' ? '#16a34a' : status === 'low' ? '#f59e0b' : status === 'high' ? '#ef4444' : '#64748b'
 
+  function formatValue(v, metricField) {
+    const n = Number(v)
+    if (!Number.isFinite(n) || n <= 0) return 'Not found'
+    if (metricField === 'hemoglobin' || metricField === 'rbc') {
+      return n.toFixed(2).replace(/\.00$/, '')
+    }
+    return Math.round(n).toLocaleString('en-IN')
+  }
+
   return (
     <View style={styles.metric}>
       <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={[styles.metricValue, { color }]}>{value ?? '-'}</Text>
-      <Subtle>{status}</Subtle>
+      <Text style={[styles.metricValue, { color }]}>{formatValue(value, field)}</Text>
+      <Subtle>{status === 'unknown' ? 'not detected' : status}</Subtle>
     </View>
   )
 }
@@ -121,10 +139,13 @@ export default function ReportViewerScreen({ route, navigation }) {
 
     setReanalyzing(false)
 
-    if (!result.success) {
+    if (!result.success || !hasDetectedValues(result.data)) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
       setStatus(REPORT_ANALYSIS_STATUS.FAILED)
-      const errorMessage = toFriendlyError(result.error, 'Re-analysis failed. Please try again.')
+      const fallbackReason = !hasDetectedValues(result.data)
+        ? 'No CBC values were detected from this report. Please upload a clearer PDF and retry.'
+        : result.error
+      const errorMessage = toFriendlyError(fallbackReason, 'Re-analysis failed. Please try again.')
       showToast(errorMessage, 'error')
       setBanner({ tone: 'error', message: errorMessage })
       await showMessage({ title: 'Analysis Failed', message: errorMessage, tone: 'error' })
@@ -220,8 +241,8 @@ export default function ReportViewerScreen({ route, navigation }) {
         </View>
 
         <PrimaryButton title="Open Original Report" onPress={() => Linking.openURL(report.file_url)} />
-        <PrimaryButton title={reanalyzing ? 'Re-analyzing...' : 'Re-analyze with AI'} onPress={handleReanalyze} loading={reanalyzing} disabled={!online} />
-        <PrimaryButton title="Delete Report" onPress={handleDelete} style={{ backgroundColor: '#dc2626' }} />
+        <PrimaryButton title={reanalyzing ? 'Re-analyzing...' : 'Run AI Analysis Again'} onPress={handleReanalyze} loading={reanalyzing} disabled={!online} />
+        <PrimaryButton title="Remove Report" onPress={handleDelete} style={{ backgroundColor: '#dc2626' }} />
         </Card>
       </AnimatedListItem>
 
@@ -231,15 +252,15 @@ export default function ReportViewerScreen({ route, navigation }) {
         {status === REPORT_ANALYSIS_STATUS.PENDING ? (
           <View style={styles.pendingWrap}>
             <ActivityIndicator size="small" color="#d97706" />
-            <Subtle>Analysis in progress. Pull to refresh in a few seconds.</Subtle>
+            <Subtle>Analysis in progress. Pull to refresh after a few seconds.</Subtle>
           </View>
         ) : null}
 
         {status === REPORT_ANALYSIS_STATUS.FAILED ? (
           <View style={styles.pendingWrap}>
-            <Subtle>Analysis failed. Retry when you have a stable connection.</Subtle>
+            <Subtle>Analysis could not find reliable CBC values. Retry with a clear report that includes patient result values.</Subtle>
             <PrimaryButton
-              title={reanalyzing ? 'Retrying...' : 'Retry Analysis'}
+              title={reanalyzing ? 'Retrying...' : 'Retry AI Analysis'}
               onPress={handleReanalyze}
               disabled={reanalyzing || !online}
               loading={reanalyzing}
@@ -248,12 +269,12 @@ export default function ReportViewerScreen({ route, navigation }) {
         ) : null}
 
         {!analysis && status !== REPORT_ANALYSIS_STATUS.PENDING && status !== REPORT_ANALYSIS_STATUS.FAILED ? (
-          <EmptyState title="No analysis found" subtitle="Tap Re-analyze with AI to generate fresh report insights." />
+          <EmptyState title="No analysis yet" subtitle="Tap Run AI Analysis Again to generate CBC insights for this report." />
         ) : null}
 
         {analysis ? (
           <>
-            <Text style={styles.subSection}>Extracted CBC Values</Text>
+            <Text style={styles.subSection}>Detected CBC Values</Text>
             <View style={styles.metricsRow}>
               <Metric label="Hemoglobin" value={analysis.hemoglobin} field="hemoglobin" />
               <Metric label="RBC" value={analysis.rbc} field="rbc" />

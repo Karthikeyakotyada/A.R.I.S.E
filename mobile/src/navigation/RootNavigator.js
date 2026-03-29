@@ -10,6 +10,7 @@ import DashboardScreen from '../screens/DashboardScreen'
 import UploadReportScreen from '../screens/UploadReportScreen'
 import ReportsScreen from '../screens/ReportsScreen'
 import ReportViewerScreen from '../screens/ReportViewerScreen'
+import AnalysisHistoryScreen from '../screens/AnalysisHistoryScreen'
 import HealthScreen from '../screens/HealthScreen'
 import HealthLogsScreen from '../screens/HealthLogsScreen'
 import ProfileScreen from '../screens/ProfileScreen'
@@ -113,6 +114,7 @@ export default function RootNavigator() {
     >
       <Stack.Screen name="Home" component={AppTabs} options={{ headerShown: false }} />
       <Stack.Screen name="ReportViewer" component={ReportViewerScreen} options={{ title: 'Report Viewer' }} />
+      <Stack.Screen name="AnalysisHistory" component={AnalysisHistoryScreen} options={{ title: 'Analysis History' }} />
       <Stack.Screen name="HealthLogs" component={HealthLogsScreen} options={{ title: 'Health Logs' }} />
     </Stack.Navigator>
   )

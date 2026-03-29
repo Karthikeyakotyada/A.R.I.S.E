@@ -1,7 +1,18 @@
 import { useEffect, useRef } from 'react'
-import { ActivityIndicator, Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ActivityIndicator, Animated, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { theme } from '../lib/theme'
+
+const USE_NATIVE_DRIVER = Platform.OS !== 'web'
+const CARD_SHADOW_STYLE =
+  Platform.OS === 'web'
+    ? { boxShadow: '0px 6px 14px rgba(11,19,32,0.08)' }
+    : {}
+
+const PRIMARY_BUTTON_SHADOW_STYLE =
+  Platform.OS === 'web'
+    ? { boxShadow: '0px 4px 8px rgba(11,47,46,0.18)' }
+    : {}
 
 export function Screen({ children, scroll = true, refreshing = false, onRefresh }) {
   const opacity = useRef(new Animated.Value(0)).current
@@ -12,12 +23,12 @@ export function Screen({ children, scroll = true, refreshing = false, onRefresh 
       Animated.timing(opacity, {
         toValue: 1,
         duration: 260,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
         toValue: 0,
         duration: 260,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start()
   }, [opacity, translateY])
@@ -134,10 +145,7 @@ const styles = StyleSheet.create({
     borderColor: theme.colors.border,
     padding: 16,
     gap: 12,
-    shadowColor: '#0b1320',
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
+    ...CARD_SHADOW_STYLE,
     elevation: 2,
   },
   heading: {
@@ -157,10 +165,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
-    shadowColor: theme.colors.primaryDark,
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    ...PRIMARY_BUTTON_SHADOW_STYLE,
     elevation: 2,
   },
   primaryButtonText: {

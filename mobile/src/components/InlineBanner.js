@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { Animated, StyleSheet, Text, View } from 'react-native'
+import { Animated, Platform, StyleSheet, Text, View } from 'react-native'
+
+const USE_NATIVE_DRIVER = Platform.OS !== 'web'
 
 export default function InlineBanner({ message, tone = 'info' }) {
   const opacity = useRef(new Animated.Value(0)).current
@@ -10,12 +12,12 @@ export default function InlineBanner({ message, tone = 'info' }) {
       Animated.timing(opacity, {
         toValue: 1,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
         toValue: 0,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start()
   }, [opacity, translateY])

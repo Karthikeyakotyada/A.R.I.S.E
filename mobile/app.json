@@ -3,6 +3,9 @@
     "name": "ARISE Mobile",
     "slug": "arise-mobile",
     "version": "1.0.0",
+    "android": {
+      "package": "com.arise.mobile"
+    },
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [

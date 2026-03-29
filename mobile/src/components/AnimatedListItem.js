@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { Animated } from 'react-native'
+import { Animated, Platform } from 'react-native'
+
+const USE_NATIVE_DRIVER = Platform.OS !== 'web'
 
 export default function AnimatedListItem({ index = 0, children, style }) {
   const opacity = useRef(new Animated.Value(0)).current
@@ -12,13 +14,13 @@ export default function AnimatedListItem({ index = 0, children, style }) {
         toValue: 1,
         duration: 260,
         delay,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(translateY, {
         toValue: 0,
         duration: 260,
         delay,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start()
   }, [index, opacity, translateY])

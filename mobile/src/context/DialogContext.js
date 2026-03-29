@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Animated, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+
+const USE_NATIVE_DRIVER = Platform.OS !== 'web'
 
 const DialogContext = createContext({
   showMessage: async () => {},
@@ -18,12 +20,12 @@ export function DialogProvider({ children }) {
       Animated.timing(opacity, {
         toValue: 1,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(scale, {
         toValue: 1,
         duration: 180,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start()
   }, [opacity, scale])
@@ -33,12 +35,12 @@ export function DialogProvider({ children }) {
       Animated.timing(opacity, {
         toValue: 0,
         duration: 150,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(scale, {
         toValue: 0.96,
         duration: 150,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start(() => setDialog(null))
   }, [opacity, scale])

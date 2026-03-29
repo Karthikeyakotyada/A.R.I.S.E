@@ -15,10 +15,32 @@ export const REPORT_STATUS_META = {
   analysis_failed: { label: 'Failed', tone: 'error' },
 }
 
+function hasDetectedValues(analysis) {
+  if (!analysis) return false
+  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets']
+  return fields.some((field) => {
+    const value = Number(analysis[field])
+    return Number.isFinite(value) && value > 0
+  })
+}
+
 export function resolveReportStatus(report, latestAnalysis) {
   const raw = report?.analysis_status
-  if (raw && REPORT_STATUS_META[raw]) return raw
-  if (latestAnalysis?.id) return REPORT_ANALYSIS_STATUS.COMPLETE
+  if (raw && REPORT_STATUS_META[raw]) {
+    if (
+      raw === REPORT_ANALYSIS_STATUS.COMPLETE &&
+      latestAnalysis?.id &&
+      !hasDetectedValues(latestAnalysis)
+    ) {
+      return REPORT_ANALYSIS_STATUS.FAILED
+    }
+    return raw
+  }
+  if (latestAnalysis?.id) {
+    return hasDetectedValues(latestAnalysis)
+      ? REPORT_ANALYSIS_STATUS.COMPLETE
+      : REPORT_ANALYSIS_STATUS.FAILED
+  }
   return REPORT_ANALYSIS_STATUS.UPLOADED
 }
 
