@@ -207,6 +207,7 @@ export default function UploadReportScreen({ navigation }) {
       })
       return
     }
+    const authUserId = activeSession.user.id
 
     setUploading(true)
     setUploadProgress(0)
@@ -215,7 +216,7 @@ export default function UploadReportScreen({ navigation }) {
 
       // Upload file directly without base64 conversion
       const { filePath, fileUrl } = await uploadReportFile({
-        userId: user.id,
+        userId: authUserId,
         fileUri: selectedFile.uri,
         fileName: selectedFile.name,
         mimeType: selectedFile.mimeType,
@@ -227,7 +228,7 @@ export default function UploadReportScreen({ navigation }) {
       const { data, error } = await supabase
         .from('reports')
         .insert({
-          user_id: user.id,
+          user_id: authUserId,
           file_name: selectedFile.name,
           file_url: fileUrl,
         })

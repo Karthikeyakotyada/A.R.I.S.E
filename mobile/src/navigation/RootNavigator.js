@@ -11,9 +11,9 @@ import UploadReportScreen from '../screens/UploadReportScreen'
 import ReportsScreen from '../screens/ReportsScreen'
 import ReportViewerScreen from '../screens/ReportViewerScreen'
 import AnalysisHistoryScreen from '../screens/AnalysisHistoryScreen'
-import HealthScreen from '../screens/HealthScreen'
 import HealthLogsScreen from '../screens/HealthLogsScreen'
 import ProfileScreen from '../screens/ProfileScreen'
+import EditProfileScreen from '../screens/EditProfileScreen'
 
 const Stack = createNativeStackNavigator()
 const Tab = createBottomTabNavigator()
@@ -57,7 +57,7 @@ function AppTabs() {
       />
       <Tab.Screen
         name="HealthTab"
-        component={HealthScreen}
+        component={HealthLogsScreen}
         options={{ title: 'Health', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'pulse' : 'pulse-outline', color) }}
       />
       <Tab.Screen
@@ -116,6 +116,7 @@ export default function RootNavigator() {
       <Stack.Screen name="ReportViewer" component={ReportViewerScreen} options={{ title: 'Report Viewer' }} />
       <Stack.Screen name="AnalysisHistory" component={AnalysisHistoryScreen} options={{ title: 'Analysis History' }} />
       <Stack.Screen name="HealthLogs" component={HealthLogsScreen} options={{ title: 'Health Logs' }} />
+      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
     </Stack.Navigator>
   )
 }

@@ -103,13 +103,23 @@ export default function UploadReport() {
     setProgress(0)
 
     try {
+      // Resolve the active auth user from Supabase to avoid stale context IDs.
+      const { data: authData, error: authError } = await supabase.auth.getUser()
+      const authUserId = authData?.user?.id || user.id
+      if (authError || !authUserId) {
+        setError('Session expired. Please sign in again.')
+        setUploading(false)
+        setProgress(0)
+        return
+      }
+
       // Generate unique file path
       const timestamp = Date.now()
       const ext = selectedFile.name.split('.').pop().toLowerCase()
       const safeName = selectedFile.name
         .replace(/[^a-zA-Z0-9._-]/g, '_')
         .replace(/\s+/g, '_')
-      const filePath = `reports/${user.id}/${timestamp}_${safeName}`
+      const filePath = `reports/${authUserId}/${timestamp}_${safeName}`
 
       // Simulate fine-grained progress since Supabase JS v2 doesn't expose upload events
       const progressInterval = setInterval(() => {
@@ -147,7 +157,7 @@ export default function UploadReport() {
 
       // Insert record into reports table
       const { data, error: dbError } = await supabase.from('reports').insert({
-        user_id: user.id,
+        user_id: authUserId,
         file_name: selectedFile.name,
         file_url: fileUrl,
       }).select().single()

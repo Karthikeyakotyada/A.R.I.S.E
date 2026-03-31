@@ -1,9 +1,28 @@
-import { useMemo, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
-import { Screen, Card, Heading, Subtle, PrimaryButton, GhostButton, InputField } from '../components/ui'
+import React, { useMemo, useState } from 'react'
+import {
+  StyleSheet,
+  View,
+  Text,
+  Image,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+} from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
+import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useDialog } from '../context/DialogContext'
 import { supabase } from '../lib/supabaseClient'
-import PageHeader from '../components/PageHeader'
+
+const APP_LOGO = require('../../assets/app-logo.png')
+const FONT_FAMILY = Platform.select({
+  ios: 'System',
+  android: 'Roboto',
+  default: 'sans-serif',
+})
 
 export default function SignupScreen({ navigation }) {
   const { showMessage } = useDialog()
@@ -13,6 +32,9 @@ export default function SignupScreen({ navigation }) {
     password: '',
     confirmPassword: '',
   })
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [focusedField, setFocusedField] = useState('')
   const [loading, setLoading] = useState(false)
 
   const canSubmit = useMemo(() => {
@@ -26,7 +48,7 @@ export default function SignupScreen({ navigation }) {
   function validate() {
     if (!form.name.trim()) return 'Full name is required.'
     if (!form.email.trim()) return 'Email address is required.'
-    if (form.password.length < 8) return 'Password must be at least 8 characters.'
+    if (form.password.length < 6) return 'Password must be at least 6 characters.'
     if (form.password !== form.confirmPassword) return 'Passwords do not match.'
     return null
   }
@@ -80,61 +102,350 @@ export default function SignupScreen({ navigation }) {
   }
 
   return (
-    <Screen>
-      <View style={styles.brandWrap}>
-        <PageHeader
-          eyebrow="Join"
-          title="Create Account"
-          subtitle="Set up your ARISE profile and unlock smart report insights."
-        />
-      </View>
+    <SafeAreaView style={styles.safeArea}>
+      <LinearGradient
+        colors={['#0A2E22', '#0F5132', '#4CAF6A']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.container}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.container}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.logoSection}>
+              <Image source={APP_LOGO} style={styles.logo} resizeMode="contain" />
+              <Text style={styles.appName}>ARISE</Text>
+              <Text style={styles.tagline}>Modern care, trusted insights.</Text>
+            </View>
 
-      <Card style={styles.brandCard}>
-        <Heading>Quick Registration</Heading>
-        <Subtle>Join ARISE to unlock AI-powered health insights</Subtle>
-      </Card>
+            <View style={styles.formSection}>
+              <Text style={styles.formTitle}>Create Account</Text>
+              <Text style={styles.formSubtitle}>Set up your profile and start tracking smarter care</Text>
 
-      <Card>
-        <InputField label="Full Name" value={form.name} onChangeText={(v) => updateField('name', v)} placeholder="Jane Smith" />
+              <View style={styles.inputGroup}>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    focusedField === 'name' && styles.inputWrapperFocused,
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="account-outline"
+                    size={20}
+                    color={focusedField === 'name' ? '#16A34A' : '#5B6874'}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Full name"
+                    placeholderTextColor="#7A8794"
+                    autoCapitalize="words"
+                    editable={!loading}
+                    value={form.name}
+                    onFocus={() => setFocusedField('name')}
+                    onBlur={() => setFocusedField('')}
+                    onChangeText={(value) => updateField('name', value)}
+                  />
+                </View>
+              </View>
 
-        <InputField
-          label="Email"
-          value={form.email}
-          onChangeText={(v) => updateField('email', v)}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          placeholder="you@example.com"
-        />
+              <View style={styles.inputGroup}>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    focusedField === 'email' && styles.inputWrapperFocused,
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="email-outline"
+                    size={20}
+                    color={focusedField === 'email' ? '#16A34A' : '#5B6874'}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="you@example.com"
+                    placeholderTextColor="#7A8794"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!loading}
+                    value={form.email}
+                    onFocus={() => setFocusedField('email')}
+                    onBlur={() => setFocusedField('')}
+                    onChangeText={(value) => updateField('email', value)}
+                  />
+                </View>
+              </View>
 
-        <InputField
-          label="Password"
-          value={form.password}
-          onChangeText={(v) => updateField('password', v)}
-          placeholder="Min. 8 characters"
-          secureTextEntry
-        />
+              <View style={styles.inputGroup}>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    focusedField === 'password' && styles.inputWrapperFocused,
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="lock-outline"
+                    size={20}
+                    color={focusedField === 'password' ? '#16A34A' : '#5B6874'}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    placeholder="Min. 6 characters"
+                    placeholderTextColor="#7A8794"
+                    secureTextEntry={!showPassword}
+                    editable={!loading}
+                    value={form.password}
+                    onFocus={() => setFocusedField('password')}
+                    onBlur={() => setFocusedField('')}
+                    onChangeText={(value) => updateField('password', value)}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeButton}
+                    onPress={() => setShowPassword((prev) => !prev)}
+                    disabled={loading}
+                  >
+                    <MaterialCommunityIcons
+                      name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={20}
+                      color="#1B5E20"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
 
-        <InputField
-          label="Confirm Password"
-          value={form.confirmPassword}
-          onChangeText={(v) => updateField('confirmPassword', v)}
-          placeholder="Re-enter password"
-          secureTextEntry
-        />
+              <View style={styles.inputGroup}>
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    focusedField === 'confirmPassword' && styles.inputWrapperFocused,
+                  ]}
+                >
+                  <MaterialCommunityIcons
+                    name="lock-outline"
+                    size={20}
+                    color={focusedField === 'confirmPassword' ? '#16A34A' : '#5B6874'}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    placeholder="Re-enter password"
+                    placeholderTextColor="#7A8794"
+                    secureTextEntry={!showConfirmPassword}
+                    editable={!loading}
+                    value={form.confirmPassword}
+                    onFocus={() => setFocusedField('confirmPassword')}
+                    onBlur={() => setFocusedField('')}
+                    onChangeText={(value) => updateField('confirmPassword', value)}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeButton}
+                    onPress={() => setShowConfirmPassword((prev) => !prev)}
+                    disabled={loading}
+                  >
+                    <MaterialCommunityIcons
+                      name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                      size={20}
+                      color="#1B5E20"
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
 
-        <PrimaryButton title="Create Account" onPress={handleSignup} loading={loading} disabled={!canSubmit} />
-        <GhostButton title="Sign in instead" onPress={() => navigation.navigate('Login')} />
-      </Card>
-    </Screen>
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  (!canSubmit || loading) && styles.primaryButtonDisabled,
+                ]}
+                onPress={handleSignup}
+                disabled={!canSubmit || loading}
+                activeOpacity={0.88}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Create Account</Text>
+                )}
+              </TouchableOpacity>
+
+              <View style={styles.footerRow}>
+                <Text style={styles.footerRowText}>Already have an account? </Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Login')} disabled={loading}>
+                  <Text style={styles.footerRowLink}>Sign In</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.footerText}>Secure authentication powered by Supabase</Text>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  brandWrap: {
-    marginTop: 8,
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0D3B2E',
   },
-  brandCard: {
-    backgroundColor: '#fff7ed',
-    borderColor: '#fed7aa',
+  container: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 36,
+    paddingBottom: 44,
+  },
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: 34,
+  },
+  logo: {
+    width: 128,
+    height: 128,
+    marginBottom: 14,
+  },
+  appName: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  tagline: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.78)',
+    fontWeight: '500',
+  },
+  formSection: {
+    width: '100%',
+    maxWidth: 460,
+    alignSelf: 'center',
+  },
+  formTitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  formSubtitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.74)',
+    fontWeight: '500',
+    marginBottom: 24,
+  },
+  inputGroup: {
+    marginBottom: 18,
+  },
+  inputWrapper: {
+    minHeight: 58,
+    borderRadius: 14,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#DDE5EC',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    shadowColor: '#0B1F15',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  inputWrapperFocused: {
+    borderColor: '#16A34A',
+    shadowColor: '#16A34A',
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  inputIcon: {
+    marginRight: 10,
+    textAlignVertical: 'center',
+  },
+  input: {
+    flex: 1,
+    color: '#111827',
+    fontFamily: FONT_FAMILY,
+    fontSize: 16,
+    fontWeight: '400',
+    paddingVertical: 17,
+  },
+  passwordInput: {
+    paddingRight: 8,
+  },
+  eyeButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButton: {
+    width: '100%',
+    backgroundColor: '#16A34A',
+    borderRadius: 14,
+    paddingVertical: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+    marginBottom: 38,
+    shadowColor: '#0D6A31',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.34,
+    shadowRadius: 17,
+    elevation: 7,
+  },
+  primaryButtonDisabled: {
+    backgroundColor: '#7FA984',
+    shadowOpacity: 0.12,
+    elevation: 2,
+  },
+  primaryButtonText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  footerRowText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '500',
+  },
+  footerRowLink: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  footerText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.52)',
+    fontWeight: '400',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginTop: 14,
+    marginBottom: 4,
   },
 })

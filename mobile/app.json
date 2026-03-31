@@ -3,8 +3,18 @@
     "name": "ARISE Mobile",
     "slug": "arise-mobile",
     "version": "1.0.0",
+    "icon": "./assets/app-logo.png",
+    "splash": {
+      "image": "./assets/app-logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f8f9fa"
+    },
     "android": {
-      "package": "com.arise.mobile"
+      "package": "com.arise.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/app-logo.png",
+        "backgroundColor": "#f8f9fa"
+      }
     },
     "orientation": "portrait",
     "userInterfaceStyle": "light",

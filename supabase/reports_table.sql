@@ -53,6 +53,7 @@ ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can insert their own reports" ON public.reports;
 DROP POLICY IF EXISTS "Users can select their own reports" ON public.reports;
 DROP POLICY IF EXISTS "Users can delete their own reports" ON public.reports;
+DROP POLICY IF EXISTS "Users can update their own reports" ON public.reports;
 
 -- ============================================================
 -- CREATE NEW RLS POLICIES
@@ -75,6 +76,13 @@ CREATE POLICY "Users can delete their own reports"
 ON public.reports
 FOR DELETE
 USING (auth.uid() = user_id);
+
+-- UPDATE (needed for analysis_status lifecycle updates)
+CREATE POLICY "Users can update their own reports"
+ON public.reports
+FOR UPDATE
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
 
 -- ============================================================
 -- STORAGE BUCKET SETUP
@@ -99,7 +107,10 @@ FOR INSERT
 TO authenticated
 WITH CHECK (
   bucket_id = 'cbc-reports'
-  AND auth.uid()::text = (storage.foldername(name))[2]
+  AND (
+    auth.uid()::text = (storage.foldername(name))[1]
+    OR auth.uid()::text = (storage.foldername(name))[2]
+  )
 );
 
 -- READ FILE
@@ -109,7 +120,10 @@ FOR SELECT
 TO authenticated
 USING (
   bucket_id = 'cbc-reports'
-  AND auth.uid()::text = (storage.foldername(name))[2]
+  AND (
+    auth.uid()::text = (storage.foldername(name))[1]
+    OR auth.uid()::text = (storage.foldername(name))[2]
+  )
 );
 
 -- DELETE FILE
@@ -119,5 +133,8 @@ FOR DELETE
 TO authenticated
 USING (
   bucket_id = 'cbc-reports'
-  AND auth.uid()::text = (storage.foldername(name))[2]
+  AND (
+    auth.uid()::text = (storage.foldername(name))[1]
+    OR auth.uid()::text = (storage.foldername(name))[2]
+  )
 );
