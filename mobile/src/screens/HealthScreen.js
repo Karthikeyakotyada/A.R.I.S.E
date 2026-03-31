@@ -9,6 +9,7 @@ export default function HealthScreen({ navigation }) {
         eyebrow="Health"
         title="Wellness Logs"
         subtitle="Track your vitals and symptoms over time with quick entries."
+        showTopBar={false}
       />
 
       <Card>

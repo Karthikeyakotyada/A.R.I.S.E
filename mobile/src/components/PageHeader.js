@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { theme } from '../lib/theme'
 
-export default function PageHeader({ eyebrow, title, subtitle, right }) {
+export default function PageHeader({ eyebrow, title, subtitle, right, showTopBar = true }) {
   const navigation = useNavigation()
   const { user } = useAuth()
   const [profileAvatarUrl, setProfileAvatarUrl] = useState(null)
@@ -72,27 +72,29 @@ export default function PageHeader({ eyebrow, title, subtitle, right }) {
     <View style={styles.wrap}>
       {!!eyebrow && <Text style={styles.eyebrow}>{eyebrow}</Text>}
 
-      <View style={styles.topRow}>
-        <View style={styles.brandingLeft}>
-          <View style={styles.logoWrap}>
-            <Image source={require('../../assets/app-logo.png')} style={styles.logoImage} />
+      {showTopBar && (
+        <View style={styles.topRow}>
+          <View style={styles.brandingLeft}>
+            <View style={styles.logoWrap}>
+              <Image source={require('../../assets/app-logo.png')} style={styles.logoImage} />
+            </View>
+            <View>
+              <Text style={styles.brandName}>ARISE</Text>
+              <Text style={styles.brandSubtitle}>Health Companion</Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.brandName}>ARISE</Text>
-            <Text style={styles.brandSubtitle}>Health Companion</Text>
-          </View>
-        </View>
 
-        {right || (
-          <Pressable style={({ pressed }) => [styles.avatarWrap, pressed && styles.avatarPressed]} onPress={goToProfile}>
-            {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarText}>{initials}</Text>
-            )}
-          </Pressable>
-        )}
-      </View>
+          {right || (
+            <Pressable style={({ pressed }) => [styles.avatarWrap, pressed && styles.avatarPressed]} onPress={goToProfile}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{initials}</Text>
+              )}
+            </Pressable>
+          )}
+        </View>
+      )}
 
       {(!!title || !!subtitle) && (
         <View style={styles.left}>

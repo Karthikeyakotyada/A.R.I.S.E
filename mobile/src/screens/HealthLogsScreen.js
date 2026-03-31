@@ -124,6 +124,7 @@ export default function HealthLogsScreen() {
         eyebrow="Health"
         title="Health Logs"
         subtitle="Capture vitals daily to build trends over time."
+        showTopBar={false}
       />
 
       <View style={styles.quickStatsSection}>

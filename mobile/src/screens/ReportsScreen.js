@@ -184,6 +184,7 @@ export default function ReportsScreen({ navigation }) {
         eyebrow="Reports"
         title="My Report Library"
         subtitle={loading ? 'Loading your reports...' : reportCountLabel}
+        showTopBar={false}
       />
 
       <Pressable style={styles.historyBtn} onPress={() => navigation.navigate('AnalysisHistory')}>

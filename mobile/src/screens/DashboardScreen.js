@@ -40,6 +40,7 @@ const METRIC_ACTIVE_SHADOW_STYLE =
     : {}
 
 const SOFT_BORDER_COLOR = '#e2e8f0'
+const MAX_RECENT_LOGS = 3
 const HEALTH_SEVERITY_COLORS = {
   normal: '#16a34a',
   warning: '#f59e0b',
@@ -69,7 +70,7 @@ export default function DashboardScreen({ navigation }) {
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
-          .limit(3),
+          .limit(MAX_RECENT_LOGS),
         supabase
           .from('profiles')
           .select('avatar_url')
@@ -78,7 +79,7 @@ export default function DashboardScreen({ navigation }) {
       ])
 
       setReportCount(reports?.length || 0)
-      setRecentLogs(logs || [])
+      setRecentLogs((logs || []).slice(0, MAX_RECENT_LOGS))
       setProfileAvatarUrl(profile?.avatar_url || null)
       setAvatarLoaded(true)
     } catch (error) {
@@ -133,6 +134,7 @@ export default function DashboardScreen({ navigation }) {
   }
 
   const averages = calculateAverages()
+  const recentLogsForHistory = recentLogs.slice(0, MAX_RECENT_LOGS)
   const BLOOD_SUGAR_MODE =
     String(process.env.EXPO_PUBLIC_BLOOD_SUGAR_MODE || 'random').toLowerCase() === 'fasting'
       ? 'fasting'
@@ -698,12 +700,12 @@ export default function DashboardScreen({ navigation }) {
         <View style={styles.recentLogsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Recent Health Logs</Text>
-            {recentLogs.length > 0 && (
-              <Text style={styles.sectionBadge}>{recentLogs.length}</Text>
+            {recentLogsForHistory.length > 0 && (
+              <Text style={styles.sectionBadge}>{recentLogsForHistory.length}</Text>
             )}
           </View>
 
-          {recentLogs.length === 0 ? (
+          {recentLogsForHistory.length === 0 ? (
             <View style={styles.emptyStateContainer}>
               <Text style={styles.emptyStateIcon}>📋</Text>
               <Text style={styles.emptyStateTitle}>No health logs yet</Text>
@@ -713,12 +715,12 @@ export default function DashboardScreen({ navigation }) {
             </View>
           ) : (
             <View style={styles.logsList}>
-              {recentLogs.map((log, index) => (
+              {recentLogsForHistory.map((log, index) => (
                 <AnimatedListItem key={log.id} index={index}>
                   <View style={styles.timelineRow}>
                     <View style={styles.timelineRail}>
                       <View style={styles.timelineDot} />
-                      {index !== recentLogs.length - 1 ? <View style={styles.timelineLine} /> : null}
+                      {index !== recentLogsForHistory.length - 1 ? <View style={styles.timelineLine} /> : null}
                     </View>
 
                     <Pressable
