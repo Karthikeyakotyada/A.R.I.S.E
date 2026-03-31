@@ -3,6 +3,7 @@ import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } fr
 import { useFocusEffect } from '@react-navigation/native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import * as ImagePicker from 'expo-image-picker'
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator'
 import { Card, Screen, Subtle } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
@@ -23,6 +24,9 @@ export default function ProfileScreen({ navigation }) {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarSheetVisible, setAvatarSheetVisible] = useState(false)
   const [avatarSheetOpenedAt, setAvatarSheetOpenedAt] = useState(0)
+  const [previewVisible, setPreviewVisible] = useState(false)
+  const [pendingAvatarUri, setPendingAvatarUri] = useState(null)
+  const [preparingAvatar, setPreparingAvatar] = useState(false)
 
   const currentAvatarUrl = profileData
     ? (profileData.avatar_url || null)
@@ -125,9 +129,9 @@ export default function ProfileScreen({ navigation }) {
     }, [loadStats, loadProfile])
   )
 
-  const handlePickUpload = async () => {
+  const pickAndPrepareAvatar = async () => {
     if (!user) return
-    setUploadingAvatar(true)
+
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
       if (permission.status !== 'granted') {
@@ -141,13 +145,57 @@ export default function ProfileScreen({ navigation }) {
 
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 0.7,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
       })
 
       if (result.canceled) return
 
-      const uri = result.assets[0].uri
-      const response = await fetch(uri)
+      const selected = result.assets[0]
+      if (!selected?.uri) return
+
+      setPreparingAvatar(true)
+
+      const width = Number(selected.width || 0)
+      const height = Number(selected.height || 0)
+      const actions = []
+
+      if (width > 0 && height > 0 && width !== height) {
+        const size = Math.min(width, height)
+        const originX = Math.max(0, Math.floor((width - size) / 2))
+        const originY = Math.max(0, Math.floor((height - size) / 2))
+        actions.push({ crop: { originX, originY, width: size, height: size } })
+      }
+
+      const processed = await manipulateAsync(
+        selected.uri,
+        actions,
+        {
+          compress: 0.72,
+          format: SaveFormat.JPEG,
+        }
+      )
+
+      setPendingAvatarUri(processed.uri)
+      setPreviewVisible(true)
+    } catch (err) {
+      await showMessage({
+        title: 'Image Error',
+        message: err?.message || 'Could not prepare image.',
+        tone: 'error',
+      })
+    } finally {
+      setPreparingAvatar(false)
+    }
+  }
+
+  const handleUploadPreparedAvatar = async () => {
+    if (!user || !pendingAvatarUri) return
+
+    setUploadingAvatar(true)
+    try {
+      const response = await fetch(pendingAvatarUri)
       const blob = await response.blob()
       const fileName = `${user.id}.jpg`
 
@@ -204,6 +252,8 @@ export default function ProfileScreen({ navigation }) {
       })
 
       showToast('Profile picture updated!', 'success')
+      setPreviewVisible(false)
+      setPendingAvatarUri(null)
       setProfileData((prev) => ({ ...(prev || {}), avatar_url: versionedUrl }))
       await loadProfile()
     } catch (err) {
@@ -270,6 +320,8 @@ export default function ProfileScreen({ navigation }) {
       })
 
       showToast('Profile photo removed.', 'success')
+      setPreviewVisible(false)
+      setPendingAvatarUri(null)
       setProfileData((prev) => ({ ...(prev || {}), avatar_url: null }))
       await loadProfile()
     } catch (err) {
@@ -317,10 +369,6 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
 
-        <View style={styles.planTag}>
-          <MaterialCommunityIcons name="star-circle" size={14} color="#15803d" />
-          <Text style={styles.planTagText}>Free Plan</Text>
-        </View>
       </Card>
 
       <Pressable
@@ -387,10 +435,6 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.sectionTitle}>Account Info</Text>
 
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Plan</Text>
-          <Text style={styles.infoValue}>Free</Text>
-        </View>
-        <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Status</Text>
           <Text style={styles.statusPill}>Active</Text>
         </View>
@@ -430,7 +474,7 @@ export default function ProfileScreen({ navigation }) {
               onPress={async () => {
                 if (!isAvatarSheetActionReady()) return
                 setAvatarSheetVisible(false)
-                await handlePickUpload()
+                await pickAndPrepareAvatar()
               }}
             >
               <MaterialCommunityIcons name="image-plus" size={18} color="#0f766e" />
@@ -460,6 +504,76 @@ export default function ProfileScreen({ navigation }) {
               onPress={() => setAvatarSheetVisible(false)}
             >
               <Text style={styles.sheetCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        transparent
+        visible={previewVisible}
+        animationType="fade"
+        onRequestClose={() => {
+          if (uploadingAvatar) return
+          setPreviewVisible(false)
+          setPendingAvatarUri(null)
+        }}
+      >
+        <View style={styles.previewBackdropHost}>
+          <Pressable
+            style={styles.previewBackdrop}
+            onPress={() => {
+              if (uploadingAvatar) return
+              setPreviewVisible(false)
+              setPendingAvatarUri(null)
+            }}
+          />
+
+          <View style={styles.previewCard}>
+            <Text style={styles.previewTitle}>Preview Photo</Text>
+            <Subtle style={styles.previewSubtitle}>Adjust looks good? Save to update your profile.</Subtle>
+
+            <View style={styles.previewAvatarWrap}>
+              {pendingAvatarUri ? (
+                <Image source={{ uri: pendingAvatarUri }} style={styles.previewAvatarImage} />
+              ) : (
+                <Text style={styles.previewAvatarFallback}>{initials}</Text>
+              )}
+            </View>
+
+            <View style={styles.previewActionsRow}>
+              <Pressable
+                style={({ pressed }) => [styles.previewGhostBtn, pressed && styles.sheetActionPressed]}
+                onPress={async () => {
+                  if (uploadingAvatar || preparingAvatar) return
+                  await pickAndPrepareAvatar()
+                }}
+              >
+                <Text style={styles.previewGhostText}>Reselect</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.previewGhostBtn, pressed && styles.sheetActionPressed]}
+                onPress={() => {
+                  if (uploadingAvatar) return
+                  setPreviewVisible(false)
+                  setPendingAvatarUri(null)
+                }}
+              >
+                <Text style={styles.previewGhostText}>Cancel</Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [styles.previewSaveBtn, pressed && styles.sheetActionPressed]}
+              onPress={handleUploadPreparedAvatar}
+              disabled={uploadingAvatar || !pendingAvatarUri}
+            >
+              {uploadingAvatar ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Text style={styles.previewSaveText}>Use this photo</Text>
+              )}
             </Pressable>
           </View>
         </View>
@@ -498,6 +612,7 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: '100%',
     height: '100%',
+    resizeMode: 'cover',
   },
   avatarText: {
     color: '#fff',
@@ -534,24 +649,6 @@ const styles = StyleSheet.create({
   joined: {
     marginTop: 2,
     fontSize: 12,
-  },
-  planTag: {
-    alignSelf: 'flex-start',
-    marginTop: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#e8f7ec',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    borderRadius: 999,
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-  },
-  planTagText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#166534',
   },
   sectionWrap: {
     gap: 10,
@@ -601,24 +698,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 2,
   },
-  statValue: {
-    marginTop: 10,
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#0f172a',
-  },
-  statLabel: {
-    marginTop: 3,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748b',
-  },
   statsLoadingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  inlineStatusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -807,5 +887,87 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontSize: 15,
     fontWeight: '700',
+  },
+  previewBackdropHost: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 18,
+  },
+  previewBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(2,6,23,0.45)',
+  },
+  previewCard: {
+    width: '100%',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#d9e8e5',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    gap: 10,
+  },
+  previewTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  previewSubtitle: {
+    marginTop: -2,
+    marginBottom: 2,
+  },
+  previewAvatarWrap: {
+    width: 180,
+    height: 180,
+    borderRadius: 999,
+    alignSelf: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#d7e6e2',
+    backgroundColor: '#f3faf8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewAvatarImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  previewAvatarFallback: {
+    color: '#0f766e',
+    fontSize: 42,
+    fontWeight: '800',
+  },
+  previewActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  previewGhostBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewGhostText: {
+    color: '#334155',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  previewSaveBtn: {
+    minHeight: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f766e',
+    marginTop: 2,
+  },
+  previewSaveText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
   },
 })

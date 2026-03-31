@@ -36,11 +36,7 @@ export default function Profile() {
 
       <Card>
         <p className="text-sm font-bold text-slate-900">Account</p>
-        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Plan</p>
-            <p className="text-sm font-semibold text-slate-800 mt-1">Free</p>
-          </div>
+        <div className="mt-3 grid grid-cols-1 gap-3">
           <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Status</p>
             <p className="text-sm font-semibold text-slate-800 mt-1">Active</p>

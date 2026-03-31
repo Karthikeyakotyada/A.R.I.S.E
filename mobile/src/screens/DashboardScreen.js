@@ -10,6 +10,7 @@ import {
   Pressable,
   RefreshControl,
   Dimensions,
+  Image,
   ImageBackground,
   Platform,
 } from 'react-native'
@@ -45,11 +46,13 @@ const HEALTH_SEVERITY_COLORS = {
   critical: '#dc2626',
 }
 
-export default function DashboardScreen() {
+export default function DashboardScreen({ navigation }) {
   const { user } = useAuth()
   const [reportCount, setReportCount] = useState(0)
   const [recentLogs, setRecentLogs] = useState([])
   const [refreshing, setRefreshing] = useState(false)
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState(null)
+  const [avatarLoaded, setAvatarLoaded] = useState(false)
   const [selectedMetric, setSelectedMetric] = useState(null)
   const insightAnim = useRef(new Animated.Value(0)).current
 
@@ -59,20 +62,28 @@ export default function DashboardScreen() {
     if (!user) return
     setRefreshing(true)
     try {
-      const [{ data: reports }, { data: logs }] = await Promise.all([
+      const [{ data: reports }, { data: logs }, { data: profile }] = await Promise.all([
         supabase.from('reports').select('id').eq('user_id', user.id),
         supabase
           .from('health_logs')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
-          .limit(5),
+          .limit(3),
+        supabase
+          .from('profiles')
+          .select('avatar_url')
+          .eq('id', user.id)
+          .maybeSingle(),
       ])
 
       setReportCount(reports?.length || 0)
       setRecentLogs(logs || [])
+      setProfileAvatarUrl(profile?.avatar_url || null)
+      setAvatarLoaded(true)
     } catch (error) {
       console.error('Error loading dashboard:', error)
+      setAvatarLoaded(true)
     } finally {
       setRefreshing(false)
     }
@@ -438,6 +449,9 @@ export default function DashboardScreen() {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   }
   const avatarInitial = (displayName || 'U').charAt(0).toUpperCase()
+  const avatarUrl = avatarLoaded
+    ? (profileAvatarUrl || null)
+    : (user?.user_metadata?.avatar_url || null)
   const summaryCards = [
     { key: 'reports', icon: '📄', label: 'Reports', value: String(reportCount) },
     { key: 'logs', icon: '📈', label: 'Recent Logs', value: String(recentLogs.length) },
@@ -460,7 +474,7 @@ export default function DashboardScreen() {
       <View style={styles.brandingBar}>
         <View style={styles.brandingLeft}>
           <View style={styles.logoWrap}>
-            <Text style={styles.logoText}>A</Text>
+            <Image source={require('../../assets/app-logo.png')} style={styles.logoImage} />
           </View>
           <View>
             <Text style={styles.brandName}>ARISE</Text>
@@ -468,9 +482,16 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        <View style={styles.avatarWrap}>
-          <Text style={styles.avatarText}>{avatarInitial}</Text>
-        </View>
+        <Pressable
+          style={({ pressed }) => [styles.avatarWrap, pressed && styles.avatarPressed]}
+          onPress={() => navigation.navigate('ProfileTab')}
+        >
+          {avatarUrl ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{avatarInitial}</Text>
+          )}
+        </Pressable>
       </View>
 
       <ScrollView
@@ -794,14 +815,16 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#0f766e',
+    backgroundColor: '#e8f6f3',
+    borderWidth: 1,
+    borderColor: '#cfe8e3',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
-  logoText: {
-    color: '#ffffff',
-    fontWeight: '900',
-    fontSize: 16,
+  logoImage: {
+    width: 22,
+    height: 22,
   },
   brandName: {
     fontSize: 15,
@@ -815,14 +838,22 @@ const styles = StyleSheet.create({
     color: '#7b8a9d',
   },
   avatarWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#ecfdf5',
     borderWidth: 1,
     borderColor: '#86efac',
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarPressed: {
+    opacity: 0.84,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarText: {
     fontSize: 13,

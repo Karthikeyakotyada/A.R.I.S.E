@@ -11,6 +11,7 @@ import { Card, EmptyState, Screen, SkeletonLine, Subtle } from '../components/ui
 import { formatDate } from '../lib/helpers'
 import AnimatedListItem from '../components/AnimatedListItem'
 import InlineBanner from '../components/InlineBanner'
+import PageHeader from '../components/PageHeader'
 
 const WEB_INPUT_RESET_STYLE = Platform.OS === 'web'
   ? { outlineStyle: 'none' }
@@ -119,10 +120,11 @@ export default function HealthLogsScreen() {
     <Screen refreshing={refreshing} onRefresh={fetchLogs}>
       {banner ? <InlineBanner tone={banner.tone} message={banner.message} /> : null}
 
-      <View style={styles.heroBlock}>
-        <Text style={styles.heroTitle}>Health Logs</Text>
-        <Text style={styles.heroSubtitle}>Capture vitals daily to build trends over time.</Text>
-      </View>
+      <PageHeader
+        eyebrow="Health"
+        title="Health Logs"
+        subtitle="Capture vitals daily to build trends over time."
+      />
 
       <View style={styles.quickStatsSection}>
         <Text style={styles.sectionTitle}>Quick Stats Preview</Text>
