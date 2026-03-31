@@ -25,6 +25,51 @@ function hasDetectedValues(analysis) {
   })
 }
 
+function parseAiSummary(summary) {
+  if (!summary) return null
+  const fallback = (message) => ({
+    mainInsight: {
+      title: 'Summary',
+      message,
+      severity: 'normal',
+    },
+    bullets: [],
+    suggestions: [],
+  })
+
+  if (typeof summary === 'object') {
+    if (summary.mainInsight && typeof summary.mainInsight === 'object') return summary
+    return fallback('Analysis completed.')
+  }
+
+  const raw = String(summary).trim()
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed?.mainInsight && typeof parsed.mainInsight === 'object') {
+      return parsed
+    }
+  } catch (_error) {
+  }
+
+  return fallback(raw)
+}
+
+function severityColor(severity) {
+  if (severity === 'high') return '#dc2626'
+  if (severity === 'moderate') return '#d97706'
+  if (severity === 'low') return '#0284c7'
+  return '#16a34a'
+}
+
+function severityBackgroundColor(severity) {
+  if (severity === 'high') return '#FEE2E2'
+  if (severity === 'moderate') return '#FFF3CD'
+  if (severity === 'low') return '#E0F2FE'
+  return '#DCFCE7'
+}
+
 function Metric({ label, value, field }) {
   const status = value !== null && value !== undefined ? getStatusForValue(value, field) : 'unknown'
   const color = status === 'normal' ? '#16a34a' : status === 'low' ? '#f59e0b' : status === 'high' ? '#ef4444' : '#64748b'
@@ -60,6 +105,8 @@ export default function ReportViewerScreen({ route, navigation }) {
   const [banner, setBanner] = useState(null)
   const [status, setStatus] = useState(REPORT_ANALYSIS_STATUS.UPLOADED)
   const [online, setOnline] = useState(true)
+
+  const structuredSummary = parseAiSummary(analysis?.ai_summary)
 
   const fetchData = useCallback(async () => {
     if (!user || !reportId) return
@@ -288,10 +335,52 @@ export default function ReportViewerScreen({ route, navigation }) {
           <Text style={styles.score}>Health Score: {analysis.health_score}/100</Text>
         ) : null}
 
-        {analysis?.ai_summary ? (
+        {structuredSummary ? (
           <>
             <Text style={styles.subSection}>Summary</Text>
-            <Subtle>{analysis.ai_summary}</Subtle>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryHeaderRow}>
+                <Text style={styles.summaryTitle}>{structuredSummary?.mainInsight?.title || 'Summary'}</Text>
+                <View
+                  style={[
+                    styles.severityBadge,
+                    {
+                      backgroundColor: severityBackgroundColor(structuredSummary?.mainInsight?.severity || 'normal'),
+                      borderColor: `${severityColor(structuredSummary?.mainInsight?.severity || 'normal')}66`,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.severityText, { color: severityColor(structuredSummary?.mainInsight?.severity || 'normal') }]}>
+                    {String(structuredSummary?.mainInsight?.severity || 'normal').toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+
+              <Subtle>{structuredSummary?.mainInsight?.message || ''}</Subtle>
+
+              {Array.isArray(structuredSummary?.bullets) && structuredSummary.bullets.length > 0 ? (
+                <View style={styles.bulletsWrap}>
+                  {structuredSummary.bullets.map((bullet, idx) => (
+                    <Text key={`${bullet}-${idx}`} style={styles.bulletText}>{`• ${bullet}`}</Text>
+                  ))}
+                </View>
+              ) : null}
+
+              {Array.isArray(structuredSummary?.suggestions) && structuredSummary.suggestions.length > 0 ? (
+                <View style={styles.suggestionsWrap}>
+                  {structuredSummary.suggestions.map((item, idx) => (
+                    <View key={`${item?.title || 'suggestion'}-${idx}`} style={styles.suggestionItem}>
+                      <Text style={styles.suggestionTitle}>{item?.title}</Text>
+                      <Subtle>{item?.description}</Subtle>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {structuredSummary?.confidenceNote ? (
+                <Subtle style={styles.confidenceNote}>{structuredSummary.confidenceNote}</Subtle>
+              ) : null}
+            </View>
           </>
         ) : null}
 
@@ -386,5 +475,65 @@ const styles = StyleSheet.create({
   },
   pendingWrap: {
     gap: 8,
+  },
+  summaryCard: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 10,
+    gap: 8,
+    backgroundColor: '#f8fafc',
+  },
+  summaryHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  summaryTitle: {
+    fontWeight: '800',
+    color: '#0f172a',
+    fontSize: 14,
+    flex: 1,
+  },
+  severityBadge: {
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  severityText: {
+    fontWeight: '800',
+    fontSize: 10,
+    letterSpacing: 0.3,
+  },
+  bulletsWrap: {
+    gap: 4,
+  },
+  bulletText: {
+    color: '#334155',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  suggestionsWrap: {
+    gap: 6,
+  },
+  suggestionItem: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    padding: 8,
+    gap: 2,
+    backgroundColor: '#ffffff',
+  },
+  suggestionTitle: {
+    fontWeight: '700',
+    color: '#0f172a',
+    fontSize: 13,
+  },
+  confidenceNote: {
+    marginTop: 2,
+    fontStyle: 'italic',
   },
 })

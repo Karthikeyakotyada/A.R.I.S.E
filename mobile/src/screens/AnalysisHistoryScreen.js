@@ -36,6 +36,29 @@ function MetricPill({ label, value, field }) {
   )
 }
 
+function getSummaryPreview(summary) {
+  if (!summary) return ''
+
+  if (typeof summary === 'object') {
+    const title = String(summary?.mainInsight?.title || '').trim()
+    const message = String(summary?.mainInsight?.message || '').trim()
+    return [title, message].filter(Boolean).join(': ')
+  }
+
+  const raw = String(summary).trim()
+  if (!raw) return ''
+
+  try {
+    const parsed = JSON.parse(raw)
+    const title = String(parsed?.mainInsight?.title || '').trim()
+    const message = String(parsed?.mainInsight?.message || '').trim()
+    const combined = [title, message].filter(Boolean).join(': ')
+    return combined || raw
+  } catch (_error) {
+    return raw
+  }
+}
+
 export default function AnalysisHistoryScreen({ navigation }) {
   const { user } = useAuth()
   const { showMessage } = useDialog()
@@ -102,7 +125,7 @@ export default function AnalysisHistoryScreen({ navigation }) {
 
                 {item.ai_summary ? (
                   <Subtle style={styles.summary} numberOfLines={3}>
-                    {item.ai_summary}
+                    {getSummaryPreview(item.ai_summary)}
                   </Subtle>
                 ) : null}
 

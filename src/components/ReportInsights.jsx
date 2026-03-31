@@ -2,6 +2,43 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { getStatusForValue, RANGES, analyzeReport } from '../lib/cbcAnalyzer'
 
+function parseAiSummary(summary) {
+  if (!summary) return null
+
+  const fallback = (message) => ({
+    mainInsight: {
+      title: 'Summary',
+      message,
+      severity: 'normal',
+    },
+    bullets: [],
+    suggestions: [],
+  })
+
+  if (typeof summary === 'object') {
+    if (summary.mainInsight && typeof summary.mainInsight === 'object') return summary
+    return fallback('Analysis completed.')
+  }
+
+  const raw = String(summary).trim()
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (parsed?.mainInsight && typeof parsed.mainInsight === 'object') return parsed
+  } catch (_error) {
+  }
+
+  return fallback(raw)
+}
+
+function severityClass(severity) {
+  if (severity === 'high') return 'bg-red-100 text-red-700'
+  if (severity === 'moderate') return 'bg-amber-100 text-amber-700'
+  if (severity === 'low') return 'bg-sky-100 text-sky-700'
+  return 'bg-emerald-100 text-emerald-700'
+}
+
 // ──────────────────────────────────────────────────────────────
 // Sub-components
 // ──────────────────────────────────────────────────────────────
@@ -217,6 +254,8 @@ export default function ReportInsights({ report, onClose }) {
     { label: 'Platelets',  field: 'platelets',  unit: '/µL' },
   ]
 
+  const structuredSummary = parseAiSummary(analysis?.ai_summary)
+
   return (
     /* Backdrop */
     <div
@@ -354,17 +393,45 @@ export default function ReportInsights({ report, onClose }) {
               </div>
 
               {/* AI Summary */}
-              {analysis.ai_summary && (
+              {structuredSummary && (
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5">
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="white" className="w-3.5 h-3.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
                       </svg>
                     </div>
-                    <p className="text-sm font-bold text-slate-800">AI Health Insights</p>
+                      <p className="text-sm font-bold text-slate-800">{structuredSummary?.mainInsight?.title || 'AI Health Insights'}</p>
+                    </div>
+                    <span className={`text-[11px] font-bold px-2 py-1 rounded-full uppercase ${severityClass(String(structuredSummary?.mainInsight?.severity || 'normal'))}`}>
+                      {String(structuredSummary?.mainInsight?.severity || 'normal')}
+                    </span>
                   </div>
-                  <p className="text-sm text-slate-600 leading-relaxed">{analysis.ai_summary}</p>
+                  <p className="text-sm text-slate-600 leading-relaxed">{structuredSummary?.mainInsight?.message || ''}</p>
+
+                  {Array.isArray(structuredSummary?.bullets) && structuredSummary.bullets.length > 0 && (
+                    <ul className="mt-3 space-y-1.5 text-sm text-slate-700 list-disc pl-5">
+                      {structuredSummary.bullets.map((bullet, idx) => (
+                        <li key={`${bullet}-${idx}`}>{bullet}</li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {Array.isArray(structuredSummary?.suggestions) && structuredSummary.suggestions.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {structuredSummary.suggestions.map((item, idx) => (
+                        <div key={`${item?.title || 'suggestion'}-${idx}`} className="rounded-xl border border-slate-200 bg-white p-3">
+                          <p className="text-sm font-semibold text-slate-800">{item?.title}</p>
+                          <p className="text-xs text-slate-600 mt-0.5">{item?.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {structuredSummary?.confidenceNote && (
+                    <p className="text-xs text-slate-500 mt-3 italic">{structuredSummary.confidenceNote}</p>
+                  )}
 
                   {/* Disclaimer */}
                   <div className="mt-4 pt-3 border-t border-slate-200">

@@ -515,58 +515,191 @@ export function scoreHealth(values) {
 // ──────────────────────────────────────────────────────────────
 // AI SUMMARY GENERATION
 // ──────────────────────────────────────────────────────────────
+function getMissingValuesInsight() {
+  return {
+    mainInsight: {
+      title: 'CBC values needed',
+      message:
+        'Please provide hemoglobin, RBC, WBC, and platelet values for a complete CBC insight.',
+      severity: 'low',
+    },
+    bullets: [
+      'At least one CBC value is missing or unclear',
+      'A complete set helps prioritize the most important finding',
+    ],
+    suggestions: [
+      {
+        title: 'Review report values',
+        description: 'Recheck each number and unit before analysis.',
+      },
+      {
+        title: 'Track CBC trends',
+        description: 'Compare results over time to notice changes early.',
+      },
+    ],
+  }
+}
+
+function sanitizeStructuredSummary(parsed) {
+  if (!parsed || typeof parsed !== 'object') return null
+
+  const mainInsight = parsed.mainInsight && typeof parsed.mainInsight === 'object'
+    ? parsed.mainInsight
+    : {}
+
+  const allowedSeverities = new Set(['low', 'moderate', 'high', 'normal'])
+  const severity = allowedSeverities.has(String(mainInsight.severity || '').toLowerCase())
+    ? String(mainInsight.severity || '').toLowerCase()
+    : 'low'
+
+  const bullets = Array.isArray(parsed.bullets)
+    ? parsed.bullets.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 4)
+    : []
+
+  const suggestions = Array.isArray(parsed.suggestions)
+    ? parsed.suggestions
+      .map((item) => ({
+        title: String(item?.title || '').trim(),
+        description: String(item?.description || '').trim(),
+      }))
+      .filter((item) => item.title && item.description)
+      .slice(0, 4)
+    : []
+
+  const sanitized = {
+    mainInsight: {
+      title: String(mainInsight.title || '').trim() || 'CBC insight',
+      message: String(mainInsight.message || '').trim() || 'CBC values reviewed.',
+      severity,
+    },
+    bullets,
+    suggestions,
+  }
+
+  const confidenceNote = String(parsed.confidenceNote || '').trim()
+  if (confidenceNote) sanitized.confidenceNote = confidenceNote
+
+  return sanitized
+}
+
+function parseStructuredSummary(text) {
+  const clean = String(text || '')
+    .replace(/```json\s*/gi, '')
+    .replace(/```/g, '')
+    .trim()
+
+  const candidates = [clean]
+  const objectMatch = clean.match(/\{[\s\S]*\}/)
+  if (objectMatch) candidates.push(objectMatch[0])
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate)
+      const sanitized = sanitizeStructuredSummary(parsed)
+      if (sanitized?.mainInsight?.title && sanitized?.mainInsight?.message) {
+        return sanitized
+      }
+    } catch (_error) {
+    }
+  }
+
+  throw new Error('Gemini returned invalid structured JSON')
+}
+
 function generateFallbackSummary(values, score) {
-  const MESSAGES = {
-    hemoglobin: {
-      low: 'Hemoglobin is below normal, which may indicate anemia.',
-      high: 'Hemoglobin is above normal, possibly indicating dehydration.',
-      normal: 'Hemoglobin is in the healthy range.',
-      unknown: 'Hemoglobin could not be detected.',
-    },
-    rbc: {
-      low: 'Red blood cell count is low, which may cause fatigue.',
-      high: 'Red blood cell count is elevated.',
-      normal: 'Red blood cell count is normal.',
-      unknown: 'RBC count could not be detected.',
-    },
-    wbc: {
-      low: 'White blood cell count is low, suggesting immune concern.',
-      high: 'White blood cell count is high, possibly indicating infection.',
-      normal: 'White blood cell count is normal.',
-      unknown: 'WBC count could not be detected.',
-    },
-    platelets: {
-      low: 'Platelet count is low, which may increase bleeding risk.',
-      high: 'Platelet count is elevated.',
-      normal: 'Platelet count is normal.',
-      unknown: 'Platelet count could not be detected.',
-    },
+  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets']
+  if (fields.some((field) => isUnavailable(values[field]))) {
+    return getMissingValuesInsight()
   }
 
-  const lines = Object.keys(MESSAGES).map(
-    (f) => {
-      if (isUnavailable(values[f])) return `${f.toUpperCase()}: 0 (not found in report text).`
-      return MESSAGES[f][getStatusForValue(values[f], f)]
-    }
-  )
+  const priority = ['hemoglobin', 'platelets', 'wbc', 'rbc']
+  const labels = {
+    hemoglobin: 'Hemoglobin',
+    platelets: 'Platelets',
+    wbc: 'WBC',
+    rbc: 'RBC',
+  }
 
-  if (score !== null) {
-    if (score >= 75) {
-      lines.push('Overall, your CBC results look healthy.')
-    } else if (score >= 50) {
-      lines.push('Some values need attention. Please consult your doctor.')
-    } else {
-      lines.push(
-        'Multiple values are outside normal ranges. Please seek medical advice.'
-      )
+  const firstAbnormalField = priority.find((field) => {
+    const status = getStatusForValue(values[field], field)
+    return status === 'low' || status === 'high'
+  })
+
+  if (!firstAbnormalField) {
+    return {
+      mainInsight: {
+        title: 'CBC looks stable',
+        message: 'All provided CBC values are within expected ranges.',
+        severity: 'normal',
+      },
+      bullets: [
+        'Hemoglobin, RBC, WBC, and platelets appear in range',
+        'Continue healthy daily habits and regular checkups',
+      ],
+      suggestions: [
+        {
+          title: 'Stay well hydrated',
+          description: 'Drink enough water daily to support blood health.',
+        },
+        {
+          title: 'Keep balanced meals',
+          description: 'Include fruits, vegetables, protein, and iron-rich foods.',
+        },
+      ],
     }
   }
 
-  return lines.join(' ')
+  const status = getStatusForValue(values[firstAbnormalField], firstAbnormalField)
+  const value = values[firstAbnormalField]
+  const { unit, min, max } = RANGES[firstAbnormalField]
+
+  const severity = firstAbnormalField === 'hemoglobin'
+    ? 'high'
+    : firstAbnormalField === 'platelets'
+      ? 'moderate'
+      : firstAbnormalField === 'wbc'
+        ? 'moderate'
+        : 'low'
+
+  return {
+    mainInsight: {
+      title: `${labels[firstAbnormalField]} is ${status}`,
+      message: `${labels[firstAbnormalField]} is ${value} ${unit} (reference ${min}-${max}), which is the top priority finding right now.`,
+      severity,
+    },
+    bullets: [
+      `${labels[firstAbnormalField]} is outside the expected range`,
+      'Other CBC values should be viewed together for full context',
+    ],
+    suggestions: [
+      {
+        title: 'Support recovery basics',
+        description: 'Focus on rest, hydration, and regular balanced meals.',
+      },
+      {
+        title: 'Monitor symptoms',
+        description: 'Track fatigue, bruising, or fever and note any changes.',
+      },
+    ],
+    ...(score === null
+      ? {}
+      : {
+        confidenceNote:
+            score >= 75
+              ? 'Overall pattern appears relatively stable.'
+              : 'Some values may need closer follow-up over time.',
+      }),
+  }
 }
 
 async function generateAISummary(values, score, timeoutMs) {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY
+  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets']
+
+  if (fields.some((field) => isUnavailable(values[field]))) {
+    return getMissingValuesInsight()
+  }
+
   if (!apiKey) return generateFallbackSummary(values, score)
 
   try {
@@ -579,17 +712,42 @@ async function generateAISummary(values, score, timeoutMs) {
       })
       .join('\n')
 
-    const prompt = `You are ARISE, an AI health assistant. A patient uploaded a CBC report with these values:
+    const prompt = `You are a health assistant analyzing CBC (Complete Blood Count) reports.
+
+Given values:
 
 ${valueLines}
-Overall health score: ${score ?? 'unknown'}/100
 
-Write a clear, empathetic 3–4 sentence health summary for the patient.
-- Mention each detected value briefly (normal, low, or high)
-- Suggest what abnormal values might indicate
-- End with an appropriate recommendation
-- Keep it friendly, non-alarming, and under 120 words
-- Use plain text, no markdown`
+Return ONLY valid JSON in this exact shape:
+{
+  "mainInsight": {
+    "title": "",
+    "message": "",
+    "severity": "low | moderate | high | normal"
+  },
+  "bullets": [
+    "short bullet insight 1",
+    "short bullet insight 2"
+  ],
+  "suggestions": [
+    {
+      "title": "",
+      "description": ""
+    }
+  ],
+  "confidenceNote": ""
+}
+
+Rules:
+- Keep insights short, clear, and user-friendly
+- Do not give medical prescriptions
+- Suggestions must be general lifestyle or home remedies only
+- If all values are normal, return a positive main insight
+- Prioritize the most important abnormal value for mainInsight using this order: Hemoglobin > Platelets > WBC > RBC
+- Keep tone calm and supportive, not scary
+- Return JSON only, no markdown, no extra text
+
+Overall health score: ${score ?? 'unknown'}/100`
 
     const text = await geminiGenerateContent(
       apiKey,
@@ -599,7 +757,7 @@ Write a clear, empathetic 3–4 sentence health summary for the patient.
       timeoutMs
     )
 
-    return text.trim()
+    return parseStructuredSummary(text)
   } catch (error) {
     console.warn('[ARISE] AI summary failed, using fallback:', error.message)
     return generateFallbackSummary(values, score)
@@ -672,7 +830,7 @@ export async function analyzeReport({
   try {
     let values = { hemoglobin: null, rbc: null, wbc: null, platelets: null }
     let score = null
-    let summary = ''
+    let summary = null
     let geminiError = null
     let extractedText = ''
 
@@ -722,25 +880,40 @@ export async function analyzeReport({
       console.error('[ARISE] Primary extraction failed:', err.message)
     }
 
-    values = withZeroFallback(values)
-    const hasDetectedValues = Object.values(values).some((v) => !isUnavailable(v))
-    score = scoreHealth(values)
+    const summaryValues = {
+      hemoglobin: values.hemoglobin,
+      rbc: values.rbc,
+      wbc: values.wbc,
+      platelets: values.platelets,
+    }
+
+    const hasDetectedValues = Object.values(summaryValues).some((v) => !isUnavailable(v))
+    score = scoreHealth(summaryValues)
     console.log('[ARISE] Health score:', score)
 
     try {
-      summary = await generateAISummary(values, score, timeoutMs)
+      summary = await generateAISummary(summaryValues, score, timeoutMs)
     } catch (err) {
       console.warn('[ARISE] AI summary failed, using fallback:', err.message)
-      summary = generateFallbackSummary(values, score)
+      summary = generateFallbackSummary(summaryValues, score)
     }
 
     if (geminiError) {
-      summary = `Note: extraction fallback applied (${normalizeGeminiError(geminiError)}). ${summary}`
+      summary = {
+        ...(summary || generateFallbackSummary(summaryValues, score)),
+        confidenceNote: `Extraction fallback applied: ${normalizeGeminiError(geminiError)}`,
+      }
     }
 
     if (!hasDetectedValues) {
-      summary = `No CBC values could be reliably detected from this report. ${summary}`
+      summary = getMissingValuesInsight()
     }
+
+    if (!summary || typeof summary !== 'object') {
+      summary = generateFallbackSummary(summaryValues, score)
+    }
+
+    values = withZeroFallback(values)
 
     console.log('[ARISE] Saving analysis to Supabase…')
     const { data, error } = await supabase
@@ -752,7 +925,7 @@ export async function analyzeReport({
         wbc: values.wbc,
         platelets: values.platelets,
         health_score: score,
-        ai_summary: summary,
+        ai_summary: JSON.stringify(summary),
       })
       .select()
       .single()
