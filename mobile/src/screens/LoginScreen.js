@@ -15,7 +15,11 @@ import {
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
-import { supabase } from '../lib/supabaseClient'
+import {
+  isInvalidRefreshTokenError,
+  runAuthRequestWithRecovery,
+  supabase,
+} from '../lib/supabaseClient'
 
 const APP_LOGO = require('../../assets/app-logo.png')
 const FONT_FAMILY = Platform.select({
@@ -83,15 +87,20 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      })
+      const { data, error } = await runAuthRequestWithRecovery(() =>
+        supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        })
+      )
 
       if (error) {
         const rawMessage = String(error.message || '')
+        const isStaleToken = isInvalidRefreshTokenError(error)
         const isInvalidCreds = /invalid login credentials|invalid credentials/i.test(rawMessage)
-        const friendlyMessage = isInvalidCreds
+        const friendlyMessage = isStaleToken
+          ? 'Your saved login session expired on this phone. Please tap Sign In again.'
+          : isInvalidCreds
           ? 'Invalid email or password. Please check and try again.'
           : rawMessage || 'Login failed. Please try again.'
 
@@ -129,7 +138,9 @@ export default function LoginScreen({ navigation }) {
 
     setResettingPassword(true)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail)
+      const { error } = await runAuthRequestWithRecovery(() =>
+        supabase.auth.resetPasswordForEmail(trimmedEmail)
+      )
       if (error) throw error
 
       Alert.alert(

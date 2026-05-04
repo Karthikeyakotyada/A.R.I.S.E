@@ -10,6 +10,11 @@ const projectRef = supabaseUrl?.replace(/^https?:\/\//, '').split('.')[0]
 const authStorageKey = projectRef
   ? `arise-mobile-auth-${projectRef}`
   : 'arise-mobile-auth'
+const legacyAuthStorageKeys = [
+  authStorageKey,
+  projectRef ? `sb-${projectRef}-auth-token` : null,
+  'supabase.auth.token',
+].filter(Boolean)
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
@@ -30,6 +35,23 @@ export async function clearLocalAuthSession() {
   } catch {
     // Best-effort cleanup.
   }
+
+  // Clear both current and legacy auth cache keys to avoid stale refresh-token loops.
+  await Promise.all(
+    legacyAuthStorageKeys.map((key) =>
+      AsyncStorage.removeItem(key).catch(() => undefined)
+    )
+  )
+}
+
+export async function runAuthRequestWithRecovery(request) {
+  const first = await request()
+  if (!first?.error || !isInvalidRefreshTokenError(first.error)) {
+    return first
+  }
+
+  await clearLocalAuthSession()
+  return request()
 }
 
 export async function ensureValidSession() {

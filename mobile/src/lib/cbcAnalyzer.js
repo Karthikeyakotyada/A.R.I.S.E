@@ -573,26 +573,166 @@ export function extractExtendedCBCFromText(ocrText) {
 // ──────────────────────────────────────────────────────────────
 // AI SUMMARY GENERATION
 // ──────────────────────────────────────────────────────────────
+function getSimpleFieldName(field) {
+  const names = {
+    hemoglobin: 'blood strength',
+    rbc: 'red blood cells',
+    wbc: 'germ-fighting cells',
+    platelets: 'bleeding help cells',
+  }
+
+  return names[field] || 'blood count'
+}
+
+function getSimpleValueMeaning(field, status) {
+  const meanings = {
+    hemoglobin: {
+      low: 'This can make you feel tired, weak, or short of energy.',
+      high: 'This can happen when your body is a bit low on water.',
+    },
+    rbc: {
+      low: 'Your body may not be carrying oxygen as well as usual.',
+      high: 'Your blood may be a little more concentrated than usual.',
+    },
+    wbc: {
+      low: 'Your body may have fewer cells ready to help fight germs.',
+      high: 'Your body may be reacting to something and working harder than usual.',
+    },
+    platelets: {
+      low: 'Small cuts may take longer to stop bleeding.',
+      high: 'Your body may be making extra cells that help with clotting.',
+    },
+  }
+
+  return meanings[field]?.[status] || 'This number is lower or higher than expected.'
+}
+
+function getSimpleSuggestions(field, status) {
+  const sharedSuggestions = [
+    {
+      title: 'Drink enough water',
+      description: 'Keep sipping water through the day.',
+    },
+    {
+      title: 'Keep meals balanced',
+      description: 'Eat regular meals with fruits, vegetables, protein, and whole grains.',
+    },
+  ]
+
+  const fieldSuggestions = {
+    hemoglobin: {
+      low: [
+        {
+          title: 'Add iron-rich foods',
+          description: 'Try spinach, beans, lentils, eggs, meat, or fortified cereals.',
+        },
+        {
+          title: 'Add vitamin C foods',
+          description: 'Orange, lemon, guava, or tomatoes can help your body use iron better.',
+        },
+      ],
+      high: [
+        {
+          title: 'Drink more water',
+          description: 'Enough fluids can help if your blood looks concentrated.',
+        },
+        {
+          title: 'Keep a steady routine',
+          description: 'Regular sleep and gentle movement can help your body stay balanced.',
+        },
+      ],
+    },
+    rbc: {
+      low: [
+        {
+          title: 'Choose iron-rich foods',
+          description: 'Eat leafy greens, beans, lentils, eggs, and meat if you eat it.',
+        },
+        {
+          title: 'Pair meals with vitamin C',
+          description: 'Fruits like oranges or guava can help your body use iron.',
+        },
+      ],
+      high: [
+        {
+          title: 'Drink enough water',
+          description: 'Fluids may help if the blood is a bit thick or concentrated.',
+        },
+        {
+          title: 'Avoid skipping meals',
+          description: 'Regular meals and rest can help keep things steady.',
+        },
+      ],
+    },
+    wbc: {
+      low: [
+        {
+          title: 'Rest well',
+          description: 'Give your body time to recover with good sleep.',
+        },
+        {
+          title: 'Wash hands often',
+          description: 'Simple hygiene can help reduce exposure to germs.',
+        },
+      ],
+      high: [
+        {
+          title: 'Rest and hydrate',
+          description: 'Sleep and water are simple ways to support your body.',
+        },
+        {
+          title: 'Watch how you feel',
+          description: 'If you feel unwell, keep track of changes and avoid overdoing it.',
+        },
+      ],
+    },
+    platelets: {
+      low: [
+        {
+          title: 'Be gentle with your body',
+          description: 'Avoid rough activity and use care with sharp objects.',
+        },
+        {
+          title: 'Eat regular meals',
+          description: 'Balanced food and enough water can support recovery.',
+        },
+      ],
+      high: [
+        {
+          title: 'Stay hydrated',
+          description: 'Water and regular meals can help your body stay balanced.',
+        },
+        {
+          title: 'Keep moving gently',
+          description: 'Light walking and normal daily activity can be enough.',
+        },
+      ],
+    },
+  }
+
+  return fieldSuggestions[field]?.[status] || sharedSuggestions
+}
+
 function getMissingValuesInsight() {
   return {
     mainInsight: {
-      title: 'CBC values needed',
+      title: 'Blood test numbers needed',
       message:
-        'Please provide hemoglobin, RBC, WBC, and platelet values for a complete CBC insight.',
+        'Please share the main blood test numbers so I can give a simple summary.',
       severity: 'low',
     },
     bullets: [
-      'At least one CBC value is missing or unclear',
-      'A complete set helps prioritize the most important finding',
+      'At least one number is missing or unclear',
+      'A full set gives a clearer picture',
     ],
     suggestions: [
       {
-        title: 'Review report values',
-        description: 'Recheck each number and unit before analysis.',
+        title: 'Check the numbers again',
+        description: 'Look over the report to make sure each value is easy to read.',
       },
       {
-        title: 'Track CBC trends',
-        description: 'Compare results over time to notice changes early.',
+        title: 'Save the old reports',
+        description: 'Comparing past results can help spot changes over time.',
       },
     ],
   }
@@ -686,24 +826,15 @@ function generateFallbackSummary(values, score) {
   if (!firstAbnormalField) {
     return {
       mainInsight: {
-        title: 'CBC looks stable',
-        message: 'All provided CBC values are within expected ranges.',
+        title: 'Blood test looks okay',
+        message: 'The main numbers we checked are in a normal range.',
         severity: 'normal',
       },
       bullets: [
-        'Hemoglobin, RBC, WBC, and platelets appear in range',
-        'Continue healthy daily habits and regular checkups',
+        'The main numbers do not look out of place',
+        'Keep up good daily habits and regular checkups',
       ],
-      suggestions: [
-        {
-          title: 'Stay well hydrated',
-          description: 'Drink enough water daily to support blood health.',
-        },
-        {
-          title: 'Keep balanced meals',
-          description: 'Include fruits, vegetables, protein, and iron-rich foods.',
-        },
-      ],
+      suggestions: getSimpleSuggestions(firstAbnormalField, 'normal'),
     }
   }
 
@@ -721,31 +852,22 @@ function generateFallbackSummary(values, score) {
 
   return {
     mainInsight: {
-      title: `${labels[firstAbnormalField]} is ${status}`,
-      message: `${labels[firstAbnormalField]} is ${value} ${unit} (reference ${min}-${max}), which is the top priority finding right now.`,
+      title: `${getSimpleFieldName(firstAbnormalField)} is ${status}`,
+      message: `${getSimpleFieldName(firstAbnormalField)} is ${value} ${unit}. ${getSimpleValueMeaning(firstAbnormalField, status)}`,
       severity,
     },
     bullets: [
-      `${labels[firstAbnormalField]} is outside the expected range`,
-      'Other CBC values should be viewed together for full context',
+      `${getSimpleFieldName(firstAbnormalField)} is not in the usual range`,
+      'The other numbers also matter for the full picture',
     ],
-    suggestions: [
-      {
-        title: 'Support recovery basics',
-        description: 'Focus on rest, hydration, and regular balanced meals.',
-      },
-      {
-        title: 'Monitor symptoms',
-        description: 'Track fatigue, bruising, or fever and note any changes.',
-      },
-    ],
+    suggestions: getSimpleSuggestions(firstAbnormalField, status),
     ...(score === null
       ? {}
       : {
         confidenceNote:
             score >= 75
-              ? 'Overall pattern appears relatively stable.'
-              : 'Some values may need closer follow-up over time.',
+              ? 'The overall pattern looks fairly steady.'
+              : 'A few numbers may need a closer look over time.',
       }),
   }
 }
@@ -892,7 +1014,7 @@ async function generateAISummary(values, score, timeoutMs) {
       })
       .join('\n')
 
-    const prompt = `You are a health assistant analyzing CBC (Complete Blood Count) reports.
+    const prompt = `You are a health assistant explaining CBC (Complete Blood Count) reports in very simple language.
 
 Given values:
 
@@ -919,12 +1041,14 @@ Return ONLY valid JSON in this exact shape:
 }
 
 Rules:
-- Keep insights short, clear, and user-friendly
-- Do not give medical prescriptions
-- Suggestions must be general lifestyle or home remedies only
-- If all values are normal, return a positive main insight
+- Use everyday words and avoid medical jargon
+- Do not sound like a diagnosis or mention diseases
+- If a value is low, explain what low usually means in normal life
+- If a value is high, explain what high usually means in normal life
+- Give 1 or 2 simple food or lifestyle tips only
+- If all values are normal, say the main numbers look okay
 - Prioritize the most important abnormal value for mainInsight using this order: Hemoglobin > Platelets > WBC > RBC
-- Keep tone calm and supportive, not scary
+- Keep the tone calm, kind, and reassuring
 - Return JSON only, no markdown, no extra text
 
 Overall health score: ${score ?? 'unknown'}/100`
@@ -1526,15 +1650,18 @@ function isUnavailable(value) {
 
 /**
  * Call Google Vision OCR (DOCUMENT_TEXT_DETECTION) with a base64 image payload.
- * Returns extracted plain text or throws an error on failure.
+ * Returns extracted plain text, or an empty string when OCR is unavailable.
  */
 export async function callGoogleVisionOcr(imageBase64, mimeType) {
   const apiKey = process.env.EXPO_PUBLIC_VISION_API_KEY
   if (!apiKey) {
-    throw new Error('EXPO_PUBLIC_VISION_API_KEY is not configured')
+    console.warn('[ARISE] Vision OCR skipped: EXPO_PUBLIC_VISION_API_KEY is not configured')
+    return ''
   }
 
   try {
+    if (!imageBase64) return ''
+
     const body = {
       requests: [
         {
@@ -1553,14 +1680,31 @@ export async function callGoogleVisionOcr(imageBase64, mimeType) {
       }
     )
 
-    const json = await res.json()
+    const raw = await res.text()
+    const json = raw ? JSON.parse(raw) : null
+
+    if (!res.ok) {
+      const message =
+        json?.error?.message || `Vision HTTP ${res.status}`
+      console.warn('[ARISE] Vision OCR request failed:', message)
+      return ''
+    }
+
     const resp = json?.responses?.[0]
-    if (!resp) throw new Error('Vision returned no response')
+    if (!resp) {
+      console.warn('[ARISE] Vision OCR: empty response payload')
+      return ''
+    }
+
+    if (resp?.error?.message) {
+      console.warn('[ARISE] Vision OCR response error:', resp.error.message)
+      return ''
+    }
 
     const text = resp.fullTextAnnotation?.text || resp.textAnnotations?.[0]?.description || ''
     return String(text || '').trim()
   } catch (err) {
-    console.error('[ARISE] Vision OCR error:', err)
-    throw err
+    console.warn('[ARISE] Vision OCR error (continuing without pre-read):', err?.message || err)
+    return ''
   }
 }
