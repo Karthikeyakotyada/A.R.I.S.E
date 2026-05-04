@@ -24,6 +24,32 @@ const FONT_FAMILY = Platform.select({
   default: 'sans-serif',
 })
 
+const INPUT_WRAPPER_SHADOW_STYLE =
+  Platform.OS === 'web'
+    ? { boxShadow: '0px 5px 12px rgba(11,31,21,0.10)' }
+    : {
+        shadowColor: '#0B1F15',
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      }
+
+const INPUT_WRAPPER_FOCUSED_SHADOW_STYLE =
+  Platform.OS === 'web' ? { boxShadow: '0px 5px 12px rgba(11,31,21,0.14)' } : { shadowOpacity: 0.14 }
+
+const SIGN_IN_BUTTON_SHADOW_STYLE =
+  Platform.OS === 'web'
+    ? { boxShadow: '0px 10px 16px rgba(13,106,49,0.32)' }
+    : {
+        shadowColor: '#0D6A31',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.32,
+        shadowRadius: 16,
+      }
+
+const SIGN_IN_BUTTON_DISABLED_SHADOW_STYLE =
+  Platform.OS === 'web' ? { boxShadow: '0px 6px 10px rgba(13,106,49,0.12)' } : { shadowOpacity: 0.12 }
+
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -63,7 +89,18 @@ export default function LoginScreen({ navigation }) {
       })
 
       if (error) {
-        Alert.alert('Login Failed', error.message || 'Invalid credentials')
+        const rawMessage = String(error.message || '')
+        const isInvalidCreds = /invalid login credentials|invalid credentials/i.test(rawMessage)
+        const friendlyMessage = isInvalidCreds
+          ? 'Invalid email or password. Please check and try again.'
+          : rawMessage || 'Login failed. Please try again.'
+
+        console.error('[ARISE][AUTH] signInWithPassword failed:', {
+          status: error.status,
+          code: error.code,
+          message: rawMessage,
+        })
+        Alert.alert('Login Failed', friendlyMessage)
       } else if (data.user) {
         // Navigation will be handled by auth state listener
         Alert.alert('Success', 'Logged in successfully!')
@@ -333,15 +370,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
-    shadowColor: '#0B1F15',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
+    ...INPUT_WRAPPER_SHADOW_STYLE,
     elevation: 3,
   },
   inputWrapperFocused: {
     borderColor: '#16A34A',
-    shadowOpacity: 0.14,
+    ...INPUT_WRAPPER_FOCUSED_SHADOW_STYLE,
   },
   inputWrapperError: {
     borderColor: '#FB7185',
@@ -389,15 +423,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 34,
-    shadowColor: '#0D6A31',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.32,
-    shadowRadius: 16,
+    ...SIGN_IN_BUTTON_SHADOW_STYLE,
     elevation: 6,
   },
   signInButtonDisabled: {
     backgroundColor: '#7FA984',
-    shadowOpacity: 0.12,
+    ...SIGN_IN_BUTTON_DISABLED_SHADOW_STYLE,
     elevation: 2,
   },
   signInButtonText: {

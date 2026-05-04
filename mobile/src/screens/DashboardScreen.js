@@ -454,6 +454,35 @@ export default function DashboardScreen({ navigation }) {
   const avatarUrl = avatarLoaded
     ? (profileAvatarUrl || null)
     : (user?.user_metadata?.avatar_url || null)
+
+  const goToProfileTab = () => {
+    try {
+      const parent = navigation.getParent()
+      const parentRoutes = parent?.getState?.()?.routeNames || []
+      const currentRoutes = navigation.getState?.()?.routeNames || []
+
+      if (currentRoutes.includes('ProfileTab')) {
+        navigation.navigate('ProfileTab')
+        return
+      }
+      if (currentRoutes.includes('Home')) {
+        navigation.navigate('Home', { screen: 'ProfileTab' })
+        return
+      }
+      if (parent && parentRoutes.includes('ProfileTab')) {
+        parent.navigate('ProfileTab')
+        return
+      }
+      if (parent && parentRoutes.includes('Home')) {
+        parent.navigate('Home', { screen: 'ProfileTab' })
+        return
+      }
+
+      console.error('[ARISE] Unable to resolve ProfileTab from Dashboard')
+    } catch (error) {
+      console.error('[ARISE] Dashboard profile navigation failed:', error)
+    }
+  }
   const summaryCards = [
     { key: 'reports', icon: '📄', label: 'Reports', value: String(reportCount) },
     { key: 'logs', icon: '📈', label: 'Recent Logs', value: String(recentLogs.length) },
@@ -486,7 +515,7 @@ export default function DashboardScreen({ navigation }) {
 
         <Pressable
           style={({ pressed }) => [styles.avatarWrap, pressed && styles.avatarPressed]}
-          onPress={() => navigation.navigate('ProfileTab')}
+          onPress={goToProfileTab}
         >
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />

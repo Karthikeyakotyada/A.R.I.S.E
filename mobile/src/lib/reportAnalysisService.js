@@ -17,11 +17,14 @@ export const REPORT_STATUS_META = {
 
 function hasDetectedValues(analysis) {
   if (!analysis) return false
-  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets']
-  return fields.some((field) => {
-    const value = Number(analysis[field])
-    return Number.isFinite(value) && value > 0
-  })
+  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets', 'mcv', 'mch', 'mchc', 'neutrophils', 'lymphocytes', 'esr']
+  const sources = [analysis, analysis?.cbc_values].filter(Boolean)
+  return sources.some((source) =>
+    fields.some((field) => {
+      const value = Number(source[field])
+      return Number.isFinite(value) && value > 0
+    })
+  )
 }
 
 export function resolveReportStatus(report, latestAnalysis) {
@@ -66,7 +69,7 @@ export async function updateReportStatus(reportId, status) {
   return { success: true }
 }
 
-export async function analyzeExistingReport({ reportId, fileUri, filePath, fileType, timeoutMs = 35000 }) {
+export async function analyzeExistingReport({ reportId, fileUri, filePath, fileType, timeoutMs = 35000, preExtractedText = null }) {
   await updateReportStatus(reportId, REPORT_ANALYSIS_STATUS.PENDING)
 
   const result = await analyzeReport({
@@ -75,6 +78,7 @@ export async function analyzeExistingReport({ reportId, fileUri, filePath, fileT
     filePath,
     fileType,
     timeoutMs,
+    preExtractedText,
   })
 
   await updateReportStatus(

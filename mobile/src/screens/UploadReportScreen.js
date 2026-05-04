@@ -34,6 +34,9 @@ const { width } = Dimensions.get('window')
 
 const ACCEPTED_TYPES = {
   'application/pdf': 'PDF',
+  'image/jpeg': 'Image',
+  'image/jpg': 'Image',
+  'image/png': 'Image',
 }
 
 const MAX_SIZE_MB = 10
@@ -91,11 +94,14 @@ const UPLOAD_INTERACTION_TRANSITION_STYLE =
 
 function hasDetectedValues(analysis) {
   if (!analysis) return false
-  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets']
-  return fields.some((field) => {
-    const value = Number(analysis[field])
-    return Number.isFinite(value) && value > 0
-  })
+  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets', 'mcv', 'mch', 'mchc', 'neutrophils', 'lymphocytes', 'esr']
+  const sources = [analysis, analysis?.cbc_values].filter(Boolean)
+  return sources.some((source) =>
+    fields.some((field) => {
+      const value = Number(source[field])
+      return Number.isFinite(value) && value > 0
+    })
+  )
 }
 
 export default function UploadReportScreen({ navigation }) {
@@ -105,10 +111,11 @@ export default function UploadReportScreen({ navigation }) {
   const [selectedFile, setSelectedFile] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
+  const [reading, setReading] = useState(false)
   const [banner, setBanner] = useState(null)
   const [online, setOnline] = useState(true)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const scaleAnim = new Animated.Value(1)
+  const [scaleAnim] = useState(() => new Animated.Value(1))
 
   const refreshNetworkState = useCallback(async () => {
     const nextOnline = await isDeviceOnline()
@@ -122,9 +129,10 @@ export default function UploadReportScreen({ navigation }) {
   )
 
   function validateFile(file) {
-    if (!ACCEPTED_TYPES[file.mimeType])
-      return 'Only PDF files are allowed.'
-    if (file.size > MAX_SIZE_BYTES)
+    if (!file?.uri) return 'Invalid file selected. Please try again.'
+    if (!ACCEPTED_TYPES[file?.mimeType || 'application/pdf'])
+      return 'Only PDF or image files are allowed.'
+    if (Number(file?.size) > MAX_SIZE_BYTES)
       return `File size exceeds ${MAX_SIZE_MB} MB limit.`
     return null
   }
@@ -132,12 +140,15 @@ export default function UploadReportScreen({ navigation }) {
   async function pickFile() {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf'],
+        type: ['application/pdf', 'image/*'],
         copyToCacheDirectory: true,
         multiple: false,
       })
 
-      if (result.canceled) return
+      if (result.canceled || !Array.isArray(result.assets) || result.assets.length === 0) {
+        console.log('[ARISE] Document picker canceled or returned no assets')
+        return
+      }
       const file = result.assets[0]
 
       const validationError = validateFile(file)
@@ -157,7 +168,17 @@ export default function UploadReportScreen({ navigation }) {
       }
 
       await Haptics.selectionAsync()
-      setSelectedFile(file)
+      // Mark image picks so we can run Vision OCR before analysis.
+      const normalized = {
+        uri: file.uri,
+        name: file.name || file.uri.split('/').pop(),
+        size: file.size || 0,
+        mimeType: file.mimeType || file.type || 'application/pdf',
+        base64: file.base64 || null,
+        isImage: String((file.mimeType || file.type || '').split('/')[0]).toLowerCase() === 'image',
+      }
+
+      setSelectedFile(normalized)
 
       // Animate selection
       Animated.sequence([
@@ -212,6 +233,31 @@ export default function UploadReportScreen({ navigation }) {
     setUploading(true)
     setUploadProgress(0)
     try {
+      // If this is an image, perform a quick OCR read before upload
+      let preExtractedText = null
+      if (selectedFile?.isImage) {
+        try {
+          setReading(true)
+          setUploadProgress(5)
+          // Lazy import to avoid bundling issues on web
+          const { callGoogleVisionOcr } = require('../lib/cbcAnalyzer')
+          const base64 = selectedFile.base64 || (await (await fetch(selectedFile.uri)).blob().then(async (b) => {
+            return new Promise((res, rej) => {
+              const reader = new FileReader()
+              reader.onload = () => res(reader.result.split(',')[1])
+              reader.onerror = rej
+              reader.readAsDataURL(b)
+            })
+          }))
+          preExtractedText = await callGoogleVisionOcr(base64, selectedFile.mimeType)
+          console.log('[ARISE][OCR] Vision OCR text from upload:', preExtractedText)
+          setUploadProgress(15)
+        } catch (ocrErr) {
+          console.warn('[ARISE] Vision OCR failed, continuing without pre-read:', ocrErr)
+        } finally {
+          setReading(false)
+        }
+      }
       setUploadProgress(10)
 
       // Upload file directly without base64 conversion
@@ -219,7 +265,7 @@ export default function UploadReportScreen({ navigation }) {
         userId: authUserId,
         fileUri: selectedFile.uri,
         fileName: selectedFile.name,
-        mimeType: selectedFile.mimeType,
+        mimeType: selectedFile.mimeType || 'application/pdf',
       })
 
       setUploadProgress(50)
@@ -262,6 +308,7 @@ export default function UploadReportScreen({ navigation }) {
         filePath,
         fileType: selectedFile.mimeType,
         timeoutMs: 35000,
+        preExtractedText,
       })
       setAnalyzing(false)
       setUploadProgress(100)
@@ -299,7 +346,34 @@ export default function UploadReportScreen({ navigation }) {
       }
 
       setSelectedFile(null)
-      setTimeout(() => navigation.navigate('ReportsTab'), 1500)
+      setTimeout(() => {
+        try {
+          const parent = navigation.getParent()
+          const parentRoutes = parent?.getState?.()?.routeNames || []
+          const currentRoutes = navigation.getState?.()?.routeNames || []
+
+          if (currentRoutes.includes('ReportsTab')) {
+            navigation.navigate('ReportsTab')
+            return
+          }
+          if (currentRoutes.includes('Home')) {
+            navigation.navigate('Home', { screen: 'ReportsTab' })
+            return
+          }
+          if (parent && parentRoutes.includes('ReportsTab')) {
+            parent.navigate('ReportsTab')
+            return
+          }
+          if (parent && parentRoutes.includes('Home')) {
+            parent.navigate('Home', { screen: 'ReportsTab' })
+            return
+          }
+
+          console.error('[ARISE] Unable to navigate to ReportsTab after upload')
+        } catch (error) {
+          console.error('[ARISE] Post-upload navigation failed:', error)
+        }
+      }, 1500)
     } catch (err) {
       console.error('Upload error:', err)
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
@@ -389,8 +463,8 @@ export default function UploadReportScreen({ navigation }) {
               },
             ]}
           >
-            <View style={styles.uploadCardGlowLayer} pointerEvents="none" />
-            <View style={styles.uploadCardInnerHighlight} pointerEvents="none" />
+            <View style={styles.uploadCardGlowLayer} />
+            <View style={styles.uploadCardInnerHighlight} />
             <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
               {!selectedFile ? (
                 <View style={styles.uploadPlaceholder}>
@@ -413,7 +487,7 @@ export default function UploadReportScreen({ navigation }) {
                       {selectedFile.name}
                     </Text>
                     <Text style={styles.fileDetails}>
-                      {fileSize} KB • {ACCEPTED_TYPES[selectedFile.mimeType]}
+                      {fileSize} KB • {ACCEPTED_TYPES[selectedFile.mimeType || 'application/pdf']}
                     </Text>
                     <Text style={styles.fileReplaceHint}>Tap anywhere to select PDF</Text>
                   </View>
@@ -431,11 +505,13 @@ export default function UploadReportScreen({ navigation }) {
           <View style={styles.progressSection}>
             <View style={styles.progressHeader}>
               <Text style={styles.progressTitle}>
-                {analyzing
-                  ? 'Analyzing Report'
-                  : uploading
-                    ? 'Uploading Report'
-                    : 'Processing'}
+                {reading
+                  ? 'Reading Report...'
+                  : analyzing
+                    ? 'Analyzing Report'
+                    : uploading
+                      ? 'Uploading Report'
+                      : 'Processing'}
               </Text>
               <Text style={styles.progressPercent}>
                 {Math.round(uploadProgress)}%
@@ -674,6 +750,7 @@ const styles = StyleSheet.create({
     height: 132,
     borderRadius: 66,
     backgroundColor: 'rgba(134,239,172,0.28)',
+    pointerEvents: 'none',
   },
   uploadCardInnerHighlight: {
     position: 'absolute',
@@ -682,6 +759,7 @@ const styles = StyleSheet.create({
     top: 0,
     height: 56,
     backgroundColor: 'rgba(255,255,255,0.56)',
+    pointerEvents: 'none',
   },
   uploadCardHovered: {
     backgroundColor: '#dff3e7',

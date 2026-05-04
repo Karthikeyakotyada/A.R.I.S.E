@@ -4,15 +4,25 @@ import { decode } from 'base64-arraybuffer'
 import { supabase } from './supabaseClient'
 
 export const RANGES = {
+  // Core CBC parameters
   hemoglobin: { min: 12.0, max: 17.5, unit: 'g/dL' },
   rbc: { min: 3.8, max: 6.1, unit: 'M/µL' },
   wbc: { min: 4000, max: 11000, unit: '/µL' },
   platelets: { min: 150000, max: 450000, unit: '/µL' },
+  // Extended CBC parameters
+  mcv: { min: 80, max: 100, unit: 'fL' },
+  mch: { min: 27, max: 33, unit: 'pg' },
+  mchc: { min: 32, max: 36, unit: 'g/dL' },
+  neutrophils: { min: 40, max: 75, unit: '%' },
+  lymphocytes: { min: 20, max: 40, unit: '%' },
+  esr: { min: 0, max: 20, unit: 'mm/hr' },
 }
 
 export function getStatusForValue(value, field) {
   if (value === null || value === undefined || Number(value) <= 0) return 'unknown'
-  const { min, max } = RANGES[field]
+  const range = RANGES[field]
+  if (!range) return 'unknown'
+  const { min, max } = range
   if (value < min) return 'low'
   if (value > max) return 'high'
   return 'normal'
@@ -512,6 +522,54 @@ export function scoreHealth(values) {
   return Math.max(0, Math.min(100, score))
 }
 
+/**
+ * Extract extended CBC values from OCR text with flexible regex patterns
+ * Returns all 10 parameters with null for missing values
+ * Backward compatible with core 4 parameters (hemoglobin, rbc, wbc, platelets)
+ * @param {string} ocrText - OCR extracted text from CBC report
+ * @returns {object} Object with all CBC fields, missing values are null
+ */
+export function extractExtendedCBCFromText(ocrText) {
+  if (!ocrText || typeof ocrText !== 'string') {
+    return {
+      hemoglobin: null,
+      rbc: null,
+      wbc: null,
+      platelets: null,
+      mcv: null,
+      mch: null,
+      mchc: null,
+      neutrophils: null,
+      lymphocytes: null,
+      esr: null,
+    }
+  }
+
+  try {
+    console.log('[PARSER] Extracting extended CBC values from OCR text…')
+    const values = extractCBCValuesFromOCR(ocrText)
+    console.log('[VALUES] Extended CBC extraction complete:', {
+      detected: Object.entries(values).filter(([, v]) => v !== null).length,
+      total: Object.keys(values).length,
+    })
+    return values
+  } catch (error) {
+    console.error('[ARISE] Extended CBC extraction error:', error)
+    return {
+      hemoglobin: null,
+      rbc: null,
+      wbc: null,
+      platelets: null,
+      mcv: null,
+      mch: null,
+      mchc: null,
+      neutrophils: null,
+      lymphocytes: null,
+      esr: null,
+    }
+  }
+}
+
 // ──────────────────────────────────────────────────────────────
 // AI SUMMARY GENERATION
 // ──────────────────────────────────────────────────────────────
@@ -692,6 +750,128 @@ function generateFallbackSummary(values, score) {
   }
 }
 
+/**
+ * Generate AI insights from OCR extracted text
+ * Dynamically extracts CBC values from text, calculates health score, and generates insights
+ * @param {string} ocrText - OCR extracted text from CBC report
+ * @param {number} timeoutMs - Request timeout in milliseconds
+ * @returns {object} Structured insight with mainInsight, bullets, suggestions
+ */
+export async function generateAISummaryFromOCRText(ocrText, timeoutMs) {
+  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY
+
+  if (!ocrText || typeof ocrText !== 'string' || !ocrText.trim()) {
+    console.warn('[ARISE] Empty OCR text provided for AI summary')
+    return getMissingValuesInsight()
+  }
+
+  try {
+    // Step 1: Extract CBC values dynamically from OCR text
+    console.log('[ARISE] Extracting CBC values from OCR text dynamically…')
+    const values = extractCBCValuesFromOCR(ocrText)
+    const detectedCount = countDetectedValues(values)
+
+    if (detectedCount === 0) {
+      console.warn('[ARISE] No CBC values extracted from text')
+      return getMissingValuesInsight()
+    }
+
+    // Step 2: Calculate health score from extracted values
+    const score = scoreHealth(values)
+    console.log('[ARISE] Calculated health score from extracted values:', score, 'detected fields:', detectedCount)
+
+    // Step 3: Return fallback if no API key
+    if (!apiKey) {
+      console.log('[ARISE] No API key, using fallback summary')
+      return generateFallbackSummary(values, score)
+    }
+
+    // Step 4: Format extracted values as structured data for Gemini
+    const valueLines = Object.entries(values)
+      .map(([k, v]) => {
+        if (isUnavailable(v)) return `${k}: not detected`
+        const { min, max, unit } = RANGES[k]
+        const status = getStatusForValue(v, k)
+        return `${k}: ${v} ${unit} (reference: ${min}–${max}, status: ${status})`
+      })
+      .join('\n')
+
+    // Step 5: Build prompt with OCR context and structured values
+    const prompt = `You are a clinical health assistant analyzing a Complete Blood Count (CBC) report extracted via OCR.
+
+The following CBC values were extracted from the patient's report:
+
+${valueLines}
+
+Context from report text: "${ocrText.substring(0, 300)}${ocrText.length > 300 ? '...' : ''}"
+
+Based on these extracted values, return ONLY valid JSON in this exact shape:
+{
+  "mainInsight": {
+    "title": "",
+    "message": "",
+    "severity": "low | moderate | high | normal"
+  },
+  "bullets": [
+    "specific finding 1",
+    "specific finding 2"
+  ],
+  "suggestions": [
+    {
+      "title": "",
+      "description": ""
+    }
+  ],
+  "confidenceNote": ""
+}
+
+Rules:
+- Base insights ONLY on the extracted values provided above
+- Keep insights short, clear, and user-friendly
+- Do not give medical prescriptions or diagnoses
+- Suggestions must be general lifestyle or home remedies only
+- If all values are normal, return a positive main insight
+- Prioritize the most important abnormal value for mainInsight: Hemoglobin > Platelets > WBC > RBC
+- Keep tone calm, supportive, and non-alarmist
+- If values seem unclear or conflicting, mention confidence concerns in confidenceNote
+- Return JSON only, no markdown, no extra text
+
+Patient health score: ${score ?? 'unknown'}/100
+Detected fields: ${detectedCount}/4`
+
+    // Step 6: Call Gemini with structured data
+    console.log('[ARISE] Sending structured CBC data to Gemini for analysis…')
+    const text = await geminiGenerateContent(
+      apiKey,
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+      },
+      timeoutMs
+    )
+
+    // Step 7: Parse and return structured response
+    const parsed = parseStructuredSummary(text)
+    console.log('[ARISE] AI-generated insight:', parsed.mainInsight.title)
+    return parsed
+  } catch (error) {
+    console.warn('[ARISE] AI summary generation failed:', error.message)
+    
+    // Fallback: Return best-effort insight using extracted values
+    try {
+      const values = extractCBCValuesFromOCR(ocrText)
+      const score = scoreHealth(values)
+      return generateFallbackSummary(values, score)
+    } catch (fallbackError) {
+      console.error('[ARISE] Fallback failed:', fallbackError.message)
+      return getMissingValuesInsight()
+    }
+  }
+}
+
+/**
+ * Legacy function: Generate AI insights from pre-extracted values
+ * Maintains backward compatibility with existing code
+ */
 async function generateAISummary(values, score, timeoutMs) {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY
   const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets']
@@ -826,9 +1006,21 @@ export async function analyzeReport({
   filePath,
   fileType,
   timeoutMs = DEFAULT_AI_TIMEOUT_MS,
+  preExtractedText = null,
 }) {
   try {
-    let values = { hemoglobin: null, rbc: null, wbc: null, platelets: null }
+    let values = {
+      hemoglobin: null,
+      rbc: null,
+      wbc: null,
+      platelets: null,
+      mcv: null,
+      mch: null,
+      mchc: null,
+      neutrophils: null,
+      lymphocytes: null,
+      esr: null,
+    }
     let score = null
     let summary = null
     let geminiError = null
@@ -847,34 +1039,46 @@ export async function analyzeReport({
       throw new Error('Either fileUri or filePath must be provided')
     }
 
+    // If the caller provided pre-extracted OCR text (e.g. from Google Vision), use it
+    if (preExtractedText) {
+      console.log('[ARISE] Using pre-extracted OCR text provided by caller')
+      extractedText = String(preExtractedText || '').trim()
+      console.log('[ARISE][OCR] Pre-extracted text:', extractedText)
+    }
+
     try {
-      if (fileType === 'application/pdf') {
+      if (!extractedText) {
         extractedText = await extractRawTextWithGemini(fileBase64, fileType, timeoutMs)
-        if (isReferenceRangeOnlyDocument(extractedText)) {
-          throw new Error('Reference range table detected; no patient result values found.')
-        }
-        values = extractCBCWithTfIdf(extractedText)
-      } else {
-        extractedText = await extractRawTextWithGemini(fileBase64, fileType, timeoutMs)
+      }
+
+      console.log('[OCR] Raw OCR text:', extractedText)
+
+      if (extractedText) {
         if (isReferenceRangeOnlyDocument(extractedText)) {
           throw new Error('Reference range table detected; no patient result values found.')
         }
 
+        values = extractExtendedCBCFromText(extractedText)
+        console.log('[ARISE][CBC] Values from extractExtendedCBCFromText:', values)
+      } else {
+        // OCR fallback: try the older Gemini extraction path only when OCR text cannot be obtained.
         const extracted = await extractCBCWithGemini(fileBase64, fileType, timeoutMs)
         if (extracted) {
-          const aiValues = {
+          values = {
             hemoglobin: normalizeFieldValue('hemoglobin', extracted.hemoglobin),
             rbc: normalizeFieldValue('rbc', extracted.rbc),
             wbc: normalizeFieldValue('wbc', extracted.wbc),
             platelets: normalizeFieldValue('platelets', extracted.platelets),
+            mcv: null,
+            mch: null,
+            mchc: null,
+            neutrophils: null,
+            lymphocytes: null,
+            esr: null,
           }
-
-          const textValues = extractCBCWithTfIdf(extractedText)
-          values = mergeValues(aiValues, textValues)
+          console.log('[ARISE][CBC] Values from legacy Gemini extraction fallback:', values)
         }
       }
-
-      values = keepOnlyTextSupportedValues(values, extractedText)
     } catch (err) {
       geminiError = err.message
       console.error('[ARISE] Primary extraction failed:', err.message)
@@ -892,7 +1096,9 @@ export async function analyzeReport({
     console.log('[ARISE] Health score:', score)
 
     try {
-      summary = await generateAISummary(summaryValues, score, timeoutMs)
+      summary = extractedText
+        ? await generateAISummaryFromOCRText(extractedText, timeoutMs)
+        : generateFallbackSummary(summaryValues, score)
     } catch (err) {
       console.warn('[ARISE] AI summary failed, using fallback:', err.message)
       summary = generateFallbackSummary(summaryValues, score)
@@ -913,20 +1119,40 @@ export async function analyzeReport({
       summary = generateFallbackSummary(summaryValues, score)
     }
 
-    values = withZeroFallback(values)
+    const normalizedCbcValues = {
+      hemoglobin: values.hemoglobin ?? null,
+      rbc: values.rbc ?? null,
+      wbc: values.wbc ?? null,
+      platelets: values.platelets ?? null,
+      mcv: values.mcv ?? null,
+      mch: values.mch ?? null,
+      mchc: values.mchc ?? null,
+      neutrophils: values.neutrophils ?? null,
+      lymphocytes: values.lymphocytes ?? null,
+      esr: values.esr ?? null,
+    }
 
-    console.log('[ARISE] Saving analysis to Supabase…')
+    const analysisPayload = {
+      report_id: reportId,
+      hemoglobin: normalizedCbcValues.hemoglobin,
+      rbc: normalizedCbcValues.rbc,
+      wbc: normalizedCbcValues.wbc,
+      platelets: normalizedCbcValues.platelets,
+      mcv: normalizedCbcValues.mcv,
+      mch: normalizedCbcValues.mch,
+      mchc: normalizedCbcValues.mchc,
+      neutrophils: normalizedCbcValues.neutrophils,
+      lymphocytes: normalizedCbcValues.lymphocytes,
+      esr: normalizedCbcValues.esr,
+      cbc_values: normalizedCbcValues,
+      health_score: score ?? null,
+      ai_summary: JSON.stringify(summary),
+    }
+
+    console.log('[SUPABASE] Final payload being saved', analysisPayload)
     const { data, error } = await supabase
       .from('report_analysis')
-      .insert({
-        report_id: reportId,
-        hemoglobin: values.hemoglobin,
-        rbc: values.rbc,
-        wbc: values.wbc,
-        platelets: values.platelets,
-        health_score: score,
-        ai_summary: JSON.stringify(summary),
-      })
+      .insert(analysisPayload)
       .select()
       .single()
 
@@ -1028,6 +1254,8 @@ function normalizeFieldValue(field, value) {
   }
 
   let v = Number(value)
+
+  // Core parameters
   if (field === 'hemoglobin') {
     if (v > 0 && v <= 40) return Number(v.toFixed(2))
     return null
@@ -1051,82 +1279,148 @@ function normalizeFieldValue(field, value) {
     return null
   }
 
+  // Extended parameters
+  if (field === 'mcv') {
+    if (v > 0 && v <= 150) return Number(v.toFixed(2))
+    return null
+  }
+
+  if (field === 'mch') {
+    if (v > 0 && v <= 50) return Number(v.toFixed(2))
+    return null
+  }
+
+  if (field === 'mchc') {
+    if (v > 0 && v <= 50) return Number(v.toFixed(2))
+    return null
+  }
+
+  if (field === 'neutrophils') {
+    if (v >= 0 && v <= 100) return Number(v.toFixed(1))
+    return null
+  }
+
+  if (field === 'lymphocytes') {
+    if (v >= 0 && v <= 100) return Number(v.toFixed(1))
+    return null
+  }
+
+  if (field === 'esr') {
+    if (v >= 0 && v <= 200) return Number(v.toFixed(1))
+    return null
+  }
+
   return null
 }
 
-function computeKeywordIdf(lines, keywords) {
-  const total = Math.max(lines.length, 1)
-  const map = {}
-  for (const keyword of keywords) {
-    const df = lines.reduce(
-      (count, line) => (line.includes(keyword) ? count + 1 : count),
-      0
-    )
-    map[keyword] = Math.log((total + 1) / (df + 1)) + 1
-  }
-  return map
-}
-
-function scoreLineTfIdf(line, keywords, idfMap) {
-  let score = 0
-  for (const keyword of keywords) {
-    const occurrences = line.split(keyword).length - 1
-    if (occurrences > 0) {
-      score += occurrences * (idfMap[keyword] || 1)
-    }
-  }
-
-  if (/\d/.test(line)) score += 0.4
-  if (/(x|×|\*)\s*10\s*\^?\s*\d+/i.test(line)) score += 0.5
-  return score
-}
-
-function extractFieldFromTextTfIdf(rawText, field, keywords) {
-  const text = String(rawText || '').toLowerCase()
-  const lines = text
+/**
+ * Enhanced CBC extraction supporting 10 parameters
+ * Line-by-line OCR parsing with lookahead for split label/value formats
+ * Returns object with all fields; missing values are null
+ * Maintains backward compatibility with core 4 parameters
+ */
+function extractCBCValuesFromOCR(ocrText) {
+  const lines = String(ocrText || '')
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
 
-  if (!lines.length) return null
+  console.log('[PARSER] Split OCR lines array:', lines.length, 'lines')
 
-  const idfMap = computeKeywordIdf(lines, keywords)
+  const values = {
+    hemoglobin: null,
+    rbc: null,
+    wbc: null,
+    platelets: null,
+    mcv: null,
+    mch: null,
+    mchc: null,
+    neutrophils: null,
+    lymphocytes: null,
+    esr: null,
+  }
 
-  const scored = lines
-    .map((line) => ({
-      line,
-      score: scoreLineTfIdf(line, keywords, idfMap),
-    }))
-    .filter((row) => row.score > 0)
-    .sort((a, b) => b.score - a.score)
+  // Helper: extract first number from a line
+  function extractNumberFromLine(line) {
+    const match = line.match(/(\d+(?:\.\d+)?)/)
+    return match ? parseFloat(match[1]) : null
+  }
 
-  const candidates = scored.slice(0, 6)
-  for (const candidate of candidates) {
-    const matches = candidate.line.match(/\d+(?:\.\d+)?(?:\s*(?:x|×|\*)\s*10\s*\^?\s*\d+)?(?:\s*(?:k|lakh|lakhs|thousand))?/gi) || []
-    for (const token of matches) {
-      const parsed = parseScaledNumber(token, field)
-      const normalized = normalizeFieldValue(field, parsed)
-      if (normalized !== null) return normalized
+  // Helper: set value only if valid and not already set
+  function setIfFound(field, value, transform = (v) => v) {
+    if (value === null || value === undefined || values[field] !== null) return
+    const transformed = transform(value)
+    if (transformed !== null && transformed !== undefined) {
+      values[field] = transformed
+      console.log(`[VALUES] ${field} = ${transformed}`)
     }
   }
 
-  return null
+  // Process each line independently with strict patterns
+  lines.forEach((line) => {
+    const lowerLine = line.toLowerCase()
+    const num = extractNumberFromLine(line)
+    if (num === null) return
+
+    // Hemoglobin
+    if (/\bhemoglobin\b|\bhgb\b|\bHb\b/i.test(line)) {
+      setIfFound('hemoglobin', num)
+    }
+
+    // RBC
+    if (/\brbc\b|\bred\s+blood\s+cell\b|\berythrocyte\b/i.test(line)) {
+      setIfFound('rbc', num)
+    }
+
+    // WBC (normalize if needed)
+    if (/\bwbc\b|\btlc\b|\bwhite\s+blood\s+cell\b|\bleukocyte\b/i.test(line)) {
+      const normalized = /thou|k\/mm|k\/ul/i.test(line) ? num * 1000 : num
+      setIfFound('wbc', normalized)
+    }
+
+    // Platelets
+    if (/\bplatelet\b|\bplt\b/i.test(line)) {
+      setIfFound('platelets', num)
+    }
+
+    // MCV (must NOT match MCHC)
+    if (/\bmcv\b/i.test(line) && !/mchc/i.test(line)) {
+      setIfFound('mcv', num)
+    }
+
+    // MCHC (strict word boundary)
+    if (/\bmchc\b/i.test(line)) {
+      setIfFound('mchc', num)
+    }
+
+    // MCH (strict word boundary, must NOT match MCHC)
+    if (/\bmch\b(?!c)/i.test(line)) {
+      setIfFound('mch', num)
+    }
+
+    // Neutrophils
+    if (/\bneutrophil\b/i.test(line)) {
+      setIfFound('neutrophils', num)
+    }
+
+    // Lymphocytes
+    if (/\blymphocyte\b/i.test(line)) {
+      setIfFound('lymphocytes', num)
+    }
+
+    // ESR
+    if (/\besr\b|\bsedimentation\s+rate\b/i.test(line)) {
+      setIfFound('esr', num)
+    }
+  })
+
+  console.log('[VALUES] Final extracted:', JSON.stringify(values, null, 2))
+
+  return values
 }
 
 function extractCBCWithTfIdf(rawText) {
-  const fields = {
-    hemoglobin: ['hemoglobin', 'haemoglobin', 'hgb', 'hb'],
-    rbc: ['rbc', 'red blood cell', 'red blood cells', 'erythrocyte', 'erythrocytes'],
-    wbc: ['wbc', 'white blood cell', 'white blood cells', 'tlc', 'leukocyte', 'leucocyte'],
-    platelets: ['platelet', 'platelets', 'plt'],
-  }
-
-  return {
-    hemoglobin: extractFieldFromTextTfIdf(rawText, 'hemoglobin', fields.hemoglobin),
-    rbc: extractFieldFromTextTfIdf(rawText, 'rbc', fields.rbc),
-    wbc: extractFieldFromTextTfIdf(rawText, 'wbc', fields.wbc),
-    platelets: extractFieldFromTextTfIdf(rawText, 'platelets', fields.platelets),
-  }
+  return extractCBCValuesFromOCR(rawText)
 }
 
 function hasPatientValueEvidence(rawText, field) {
@@ -1135,9 +1429,15 @@ function hasPatientValueEvidence(rawText, field) {
 
   const keywords = {
     hemoglobin: ['hemoglobin', 'haemoglobin', 'hgb', 'hb'],
-    rbc: ['rbc', 'red blood cell', 'red blood cells', 'erythrocyte', 'erythrocytes'],
-    wbc: ['wbc', 'white blood cell', 'white blood cells', 'tlc', 'leukocyte', 'leucocyte'],
-    platelets: ['platelet', 'platelets', 'plt'],
+    rbc: ['rbc', 'red blood cell', 'red blood cells', 'erythrocyte', 'erythrocytes', 'rbc count'],
+    wbc: ['wbc', 'white blood cell', 'white blood cells', 'tlc', 'leukocyte', 'leucocyte', 'wbc count'],
+    platelets: ['platelet', 'platelets', 'plt', 'platelet count'],
+    mcv: ['mcv', 'mean corpuscular volume', 'mean cell volume'],
+    mch: ['mch', 'mean corpuscular hemoglobin', 'mean cell hemoglobin'],
+    mchc: ['mchc', 'mean corpuscular hemoglobin concentration'],
+    neutrophils: ['neutrophil', 'neutrophils', 'neut', 'pmn', 'polymorphs'],
+    lymphocytes: ['lymphocyte', 'lymphocytes', 'lymph', 'lym'],
+    esr: ['esr', 'erythrocyte sedimentation rate', 'sedimentation rate', 'sed rate'],
   }
 
   const fieldKeywords = keywords[field] || []
@@ -1222,4 +1522,45 @@ function isReferenceRangeOnlyDocument(rawText) {
 
 function isUnavailable(value) {
   return value === null || value === undefined || Number(value) <= 0
+}
+
+/**
+ * Call Google Vision OCR (DOCUMENT_TEXT_DETECTION) with a base64 image payload.
+ * Returns extracted plain text or throws an error on failure.
+ */
+export async function callGoogleVisionOcr(imageBase64, mimeType) {
+  const apiKey = process.env.EXPO_PUBLIC_VISION_API_KEY
+  if (!apiKey) {
+    throw new Error('EXPO_PUBLIC_VISION_API_KEY is not configured')
+  }
+
+  try {
+    const body = {
+      requests: [
+        {
+          image: { content: imageBase64 },
+          features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+        },
+      ],
+    }
+
+    const res = await fetch(
+      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }
+    )
+
+    const json = await res.json()
+    const resp = json?.responses?.[0]
+    if (!resp) throw new Error('Vision returned no response')
+
+    const text = resp.fullTextAnnotation?.text || resp.textAnnotations?.[0]?.description || ''
+    return String(text || '').trim()
+  } catch (err) {
+    console.error('[ARISE] Vision OCR error:', err)
+    throw err
+  }
 }

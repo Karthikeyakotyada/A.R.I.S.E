@@ -5,7 +5,19 @@ import { AuthProvider } from './src/context/AuthContext'
 import { DialogProvider } from './src/context/DialogContext'
 import { ToastProvider } from './src/context/ToastContext'
 import RootNavigator from './src/navigation/RootNavigator'
+import AppErrorBoundary from './src/components/AppErrorBoundary'
 import { theme } from './src/lib/theme'
+
+const defaultGlobalErrorHandler = global.ErrorUtils?.getGlobalHandler?.()
+
+if (global.ErrorUtils?.setGlobalHandler) {
+  global.ErrorUtils.setGlobalHandler((error, isFatal) => {
+    console.error('[ARISE] Global JS error', { isFatal, message: error?.message, stack: error?.stack })
+    if (typeof defaultGlobalErrorHandler === 'function') {
+      defaultGlobalErrorHandler(error, isFatal)
+    }
+  })
+}
 
 const navTheme = {
   ...DefaultTheme,
@@ -21,17 +33,28 @@ const navTheme = {
 
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <ToastProvider>
-        <DialogProvider>
-          <AuthProvider>
-            <NavigationContainer theme={navTheme}>
-              <StatusBar style="dark" />
-              <RootNavigator />
-            </NavigationContainer>
-          </AuthProvider>
-        </DialogProvider>
-      </ToastProvider>
-    </SafeAreaProvider>
+    <AppErrorBoundary>
+      <SafeAreaProvider>
+        <ToastProvider>
+          <DialogProvider>
+            <AuthProvider>
+              <NavigationContainer
+                theme={navTheme}
+                onUnhandledAction={(action) => {
+                  console.error('[ARISE] Navigation unhandled action:', action)
+                }}
+                onStateChange={(state) => {
+                  const routeName = state?.routes?.[state.index || 0]?.name || 'unknown'
+                  console.log('[ARISE] Navigation route:', routeName)
+                }}
+              >
+                <StatusBar style="dark" />
+                <RootNavigator />
+              </NavigationContainer>
+            </AuthProvider>
+          </DialogProvider>
+        </ToastProvider>
+      </SafeAreaProvider>
+    </AppErrorBoundary>
   )
 }

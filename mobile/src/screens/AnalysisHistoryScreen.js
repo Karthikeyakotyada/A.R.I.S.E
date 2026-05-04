@@ -99,6 +99,7 @@ export default function AnalysisHistoryScreen({ navigation }) {
         eyebrow="Reports"
         title="Analysis History"
         subtitle={loading ? 'Loading saved analyses...' : `${rows.length} saved analysis result(s)`}
+        showTopBar={false}
       />
 
       <FlatList

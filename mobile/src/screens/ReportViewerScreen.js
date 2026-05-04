@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabaseClient'
-import { getStatusForValue } from '../lib/cbcAnalyzer'
+import { RANGES, getStatusForValue } from '../lib/cbcAnalyzer'
 import { formatDate, getStoragePath } from '../lib/helpers'
 import { analyzeExistingReport, inferFileType, REPORT_ANALYSIS_STATUS, REPORT_STATUS_META, resolveReportStatus } from '../lib/reportAnalysisService'
 import { isDeviceOnline, toFriendlyError } from '../lib/network'
@@ -18,11 +18,14 @@ import MedicalDisclaimer from '../components/MedicalDisclaimer'
 
 function hasDetectedValues(analysis) {
   if (!analysis) return false
-  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets']
-  return fields.some((field) => {
-    const value = Number(analysis[field])
-    return Number.isFinite(value) && value > 0
-  })
+  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets', 'mcv', 'mch', 'mchc', 'neutrophils', 'lymphocytes', 'esr']
+  const sources = [analysis, analysis?.cbc_values].filter(Boolean)
+  return sources.some((source) =>
+    fields.some((field) => {
+      const value = Number(source[field])
+      return Number.isFinite(value) && value > 0
+    })
+  )
 }
 
 function parseAiSummary(summary) {
@@ -70,30 +73,52 @@ function severityBackgroundColor(severity) {
   return '#DCFCE7'
 }
 
+function formatFieldLabel(field) {
+  return String(field || '')
+    .replace(/_/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.toUpperCase())
+    .join(' ')
+}
+
+function formatFieldValue(field, value, unit) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return 'Not found'
+
+  if (field === 'hemoglobin' || field === 'rbc') {
+    return `${n.toFixed(2).replace(/\.00$/, '')}${unit ? ` ${unit}` : ''}`
+  }
+
+  if (field === 'mcv' || field === 'mch' || field === 'mchc' || field === 'esr') {
+    const formatted = Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, '')
+    return `${formatted}${unit ? ` ${unit}` : ''}`
+  }
+
+  if (field === 'neutrophils' || field === 'lymphocytes') {
+    const formatted = Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, '')
+    return `${formatted}${unit ? ` ${unit}` : '%'}`
+  }
+
+  return `${Math.round(n).toLocaleString('en-IN')}${unit ? ` ${unit}` : ''}`
+}
+
 function Metric({ label, value, field }) {
   const status = value !== null && value !== undefined ? getStatusForValue(value, field) : 'unknown'
   const color = status === 'normal' ? '#16a34a' : status === 'low' ? '#f59e0b' : status === 'high' ? '#ef4444' : '#64748b'
-
-  function formatValue(v, metricField) {
-    const n = Number(v)
-    if (!Number.isFinite(n) || n <= 0) return 'Not found'
-    if (metricField === 'hemoglobin' || metricField === 'rbc') {
-      return n.toFixed(2).replace(/\.00$/, '')
-    }
-    return Math.round(n).toLocaleString('en-IN')
-  }
+  const unit = RANGES[field]?.unit || ''
 
   return (
     <View style={styles.metric}>
       <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={[styles.metricValue, { color }]}>{formatValue(value, field)}</Text>
+      <Text style={[styles.metricValue, { color }]}>{formatFieldValue(field, value, unit)}</Text>
       <Subtle>{status === 'unknown' ? 'not detected' : status}</Subtle>
     </View>
   )
 }
 
 export default function ReportViewerScreen({ route, navigation }) {
-  const { reportId } = route.params
+  const reportId = route?.params?.reportId ?? null
   const { user } = useAuth()
   const { showConfirm, showMessage } = useDialog()
   const { showToast } = useToast()
@@ -107,6 +132,51 @@ export default function ReportViewerScreen({ route, navigation }) {
   const [online, setOnline] = useState(true)
 
   const structuredSummary = parseAiSummary(analysis?.ai_summary)
+  const pickValue = (...sources) => {
+    for (const source of sources) {
+      if (source !== null && source !== undefined) return source
+    }
+    return null
+  }
+
+  const cbcValues = {
+    hemoglobin: pickValue(analysis?.hemoglobin, report?.hemoglobin, analysis?.cbc_values?.hemoglobin, report?.cbc_values?.hemoglobin),
+    rbc: pickValue(analysis?.rbc, report?.rbc, analysis?.cbc_values?.rbc, report?.cbc_values?.rbc),
+    wbc: pickValue(analysis?.wbc, report?.wbc, analysis?.cbc_values?.wbc, report?.cbc_values?.wbc),
+    platelets: pickValue(analysis?.platelets, report?.platelets, analysis?.cbc_values?.platelets, report?.cbc_values?.platelets),
+    mcv: pickValue(analysis?.mcv, report?.mcv, analysis?.cbc_values?.mcv, report?.cbc_values?.mcv),
+    mch: pickValue(analysis?.mch, report?.mch, analysis?.cbc_values?.mch, report?.cbc_values?.mch),
+    mchc: pickValue(analysis?.mchc, report?.mchc, analysis?.cbc_values?.mchc, report?.cbc_values?.mchc),
+    neutrophils: pickValue(analysis?.neutrophils, report?.neutrophils, analysis?.cbc_values?.neutrophils, report?.cbc_values?.neutrophils),
+    lymphocytes: pickValue(analysis?.lymphocytes, report?.lymphocytes, analysis?.cbc_values?.lymphocytes, report?.cbc_values?.lymphocytes),
+    esr: pickValue(analysis?.esr, report?.esr, analysis?.cbc_values?.esr, report?.cbc_values?.esr),
+  }
+
+  const visibleCbcValues = Object.entries(cbcValues).filter(([, value]) => value !== null && value !== undefined)
+
+  const handleOpenOriginalReport = useCallback(async () => {
+    const url = report?.file_url
+    if (!url) {
+      showToast('Report link is missing.', 'warning')
+      setBanner({ tone: 'warning', message: 'Report file URL is missing.' })
+      return
+    }
+
+    try {
+      const canOpen = await Linking.canOpenURL(url)
+      if (!canOpen) {
+        showToast('Cannot open this report link.', 'error')
+        setBanner({ tone: 'error', message: 'Cannot open the report URL on this device.' })
+        return
+      }
+
+      await Linking.openURL(url)
+    } catch (error) {
+      console.error('[ARISE] Failed to open report URL:', error)
+      showToast('Failed to open the original report.', 'error')
+      setBanner({ tone: 'error', message: 'Failed to open the original report.' })
+    }
+  }, [report?.file_url, showToast])
 
   const fetchData = useCallback(async () => {
     if (!user || !reportId) return
@@ -139,6 +209,8 @@ export default function ReportViewerScreen({ route, navigation }) {
       const latest = analysisData?.[0] ?? null
       setReport(reportData)
       setAnalysis(latest)
+      console.log('[DEBUG] ReportViewer fetched report:', reportData)
+      console.log('[DEBUG] ReportViewer fetched analysis (latest):', latest)
       setStatus(resolveReportStatus(reportData, latest))
     } finally {
       setLoading(false)
@@ -150,6 +222,20 @@ export default function ReportViewerScreen({ route, navigation }) {
       fetchData()
     }, [fetchData])
   )
+
+  if (!reportId) {
+    return (
+      <Screen>
+        <Card>
+          <EmptyState
+            title="Missing Report"
+            subtitle="No report ID was provided for this screen."
+          />
+          <PrimaryButton title="Go Back" onPress={() => navigation.goBack()} />
+        </Card>
+      </Screen>
+    )
+  }
 
   async function handleReanalyze() {
     if (!report) return
@@ -262,6 +348,7 @@ export default function ReportViewerScreen({ route, navigation }) {
         eyebrow="Reports"
         title="Report Details"
         subtitle={report.file_name}
+        showTopBar={false}
       />
 
       {!online ? <InlineBanner tone="warning" message="You're offline or connection is unstable" /> : null}
@@ -287,7 +374,7 @@ export default function ReportViewerScreen({ route, navigation }) {
           {status === REPORT_ANALYSIS_STATUS.PENDING ? <ActivityIndicator size="small" color="#d97706" /> : null}
         </View>
 
-        <PrimaryButton title="Open Original Report" onPress={() => Linking.openURL(report.file_url)} />
+        <PrimaryButton title="Open Original Report" onPress={handleOpenOriginalReport} />
         <PrimaryButton title={reanalyzing ? 'Re-analyzing...' : 'Run AI Analysis Again'} onPress={handleReanalyze} loading={reanalyzing} disabled={!online} />
         <PrimaryButton title="Remove Report" onPress={handleDelete} style={{ backgroundColor: '#dc2626' }} />
         </Card>
@@ -322,12 +409,23 @@ export default function ReportViewerScreen({ route, navigation }) {
         {analysis ? (
           <>
             <Text style={styles.subSection}>Detected CBC Values</Text>
-            <View style={styles.metricsRow}>
-              <Metric label="Hemoglobin" value={analysis.hemoglobin} field="hemoglobin" />
-              <Metric label="RBC" value={analysis.rbc} field="rbc" />
-              <Metric label="WBC" value={analysis.wbc} field="wbc" />
-              <Metric label="Platelets" value={analysis.platelets} field="platelets" />
-            </View>
+            {visibleCbcValues.length > 0 ? (
+              <View style={styles.metricsRow}>
+                {visibleCbcValues.map(([field, value]) => (
+                  <Metric
+                    key={field}
+                    label={formatFieldLabel(field)}
+                    value={value}
+                    field={field}
+                  />
+                ))}
+              </View>
+            ) : (
+              <EmptyState
+                title="No CBC values detected"
+                subtitle="The report data is available, but no analyzable CBC values were found for display."
+              />
+            )}
           </>
         ) : null}
 

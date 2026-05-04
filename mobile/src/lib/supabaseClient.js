@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
 import { Platform } from 'react-native'
+import { isLikelyNetworkError } from './network'
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
@@ -52,6 +53,11 @@ export async function ensureValidSession() {
       await clearLocalAuthSession()
       return null
     }
+
+    if (isLikelyNetworkError(error?.message || '')) {
+      return null
+    }
+
     throw error
   }
 }
@@ -61,7 +67,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: AsyncStorage,
     storageKey: authStorageKey,
     persistSession: true,
-    autoRefreshToken: Platform.OS !== 'web',
+    autoRefreshToken: false,
     detectSessionInUrl: false,
   },
 })

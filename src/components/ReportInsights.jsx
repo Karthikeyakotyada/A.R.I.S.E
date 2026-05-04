@@ -252,6 +252,12 @@ export default function ReportInsights({ report, onClose }) {
     { label: 'RBC',        field: 'rbc',        unit: 'M/µL' },
     { label: 'WBC',        field: 'wbc',        unit: '/µL' },
     { label: 'Platelets',  field: 'platelets',  unit: '/µL' },
+    { label: 'MCV',        field: 'mcv',        unit: 'fL' },
+    { label: 'MCH',        field: 'mch',        unit: 'pg' },
+    { label: 'MCHC',       field: 'mchc',       unit: 'g/dL' },
+    { label: 'Neutrophils', field: 'neutrophils', unit: '%' },
+    { label: 'Lymphocytes', field: 'lymphocytes', unit: '%' },
+    { label: 'ESR',        field: 'esr',        unit: 'mm/h' },
   ]
 
   const structuredSummary = parseAiSummary(analysis?.ai_summary)

@@ -51,21 +51,35 @@ export default function PageHeader({ eyebrow, title, subtitle, right, showTopBar
   )
 
   const goToProfile = () => {
-    const parent = navigation.getParent()
-    const parentRoutes = parent?.getState?.()?.routeNames || []
-    const currentRoutes = navigation.getState?.()?.routeNames || []
+    try {
+      const parent = navigation.getParent()
+      const parentRoutes = parent?.getState?.()?.routeNames || []
+      const currentRoutes = navigation.getState?.()?.routeNames || []
 
-    if (parent && parentRoutes.includes('ProfileTab')) {
-      parent.navigate('ProfileTab')
-      return
+      if (parent && parentRoutes.includes('ProfileTab')) {
+        parent.navigate('ProfileTab')
+        return
+      }
+
+      if (currentRoutes.includes('ProfileTab')) {
+        navigation.navigate('ProfileTab')
+        return
+      }
+
+      if (currentRoutes.includes('Home')) {
+        navigation.navigate('Home', { screen: 'ProfileTab' })
+        return
+      }
+
+      if (parent && parentRoutes.includes('Home')) {
+        parent.navigate('Home', { screen: 'ProfileTab' })
+        return
+      }
+
+      console.error('[ARISE] Unable to find ProfileTab route from PageHeader')
+    } catch (error) {
+      console.error('[ARISE] Profile navigation failed:', error)
     }
-
-    if (currentRoutes.includes('ProfileTab')) {
-      navigation.navigate('ProfileTab')
-      return
-    }
-
-    navigation.navigate('Home', { screen: 'ProfileTab' })
   }
 
   return (
