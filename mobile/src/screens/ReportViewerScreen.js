@@ -86,21 +86,21 @@ function formatFieldValue(field, value, unit) {
   const n = Number(value)
   if (!Number.isFinite(n) || n <= 0) return 'Not found'
 
+  const raw = String(n).replace(/\.0+$/, '')
+
   if (field === 'hemoglobin' || field === 'rbc') {
-    return `${n.toFixed(2).replace(/\.00$/, '')}${unit ? ` ${unit}` : ''}`
+    return `${raw}${unit ? ` ${unit}` : ''}`
   }
 
   if (field === 'mcv' || field === 'mch' || field === 'mchc' || field === 'esr') {
-    const formatted = Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, '')
-    return `${formatted}${unit ? ` ${unit}` : ''}`
+    return `${raw}${unit ? ` ${unit}` : ''}`
   }
 
   if (field === 'neutrophils' || field === 'lymphocytes') {
-    const formatted = Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, '')
-    return `${formatted}${unit ? ` ${unit}` : '%'}`
+    return `${raw}${unit ? ` ${unit}` : '%'}`
   }
 
-  return `${Math.round(n).toLocaleString('en-IN')}${unit ? ` ${unit}` : ''}`
+  return `${raw}${unit ? ` ${unit}` : ''}`
 }
 
 function Metric({ label, value, field }) {
@@ -427,10 +427,6 @@ export default function ReportViewerScreen({ route, navigation }) {
               />
             )}
           </>
-        ) : null}
-
-        {analysis?.health_score !== null && analysis?.health_score !== undefined ? (
-          <Text style={styles.score}>Health Score: {analysis.health_score}/100</Text>
         ) : null}
 
         {structuredSummary ? (

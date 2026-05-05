@@ -241,14 +241,33 @@ export default function UploadReportScreen({ navigation }) {
           setUploadProgress(5)
           // Lazy import to avoid bundling issues on web
           const { callGoogleVisionOcr } = require('../lib/cbcAnalyzer')
-          const base64 = selectedFile.base64 || (await (await fetch(selectedFile.uri)).blob().then(async (b) => {
-            return new Promise((res, rej) => {
+          
+          let base64 = selectedFile.base64
+          if (!base64) {
+            // Extract base64 from file URI using fetch + FileReader
+            const blob = await (await fetch(selectedFile.uri)).blob()
+            base64 = await new Promise((res, rej) => {
               const reader = new FileReader()
-              reader.onload = () => res(reader.result.split(',')[1])
+              reader.onload = () => {
+                const result = reader.result
+                // Extract raw base64 after comma if data URL
+                const cleanBase64 = result.startsWith('data:') 
+                  ? result.split(',')[1] 
+                  : result
+                res(cleanBase64)
+              }
               reader.onerror = rej
-              reader.readAsDataURL(b)
+              reader.readAsDataURL(blob)
             })
-          }))
+          } else if (base64.startsWith('data:')) {
+            // Ensure selectedFile.base64 is raw base64, not data URL
+            const commaIndex = base64.indexOf(',')
+            if (commaIndex !== -1) {
+              base64 = base64.substring(commaIndex + 1)
+            }
+          }
+          
+          console.log('[ARISE] Base64 size before Vision OCR:', base64?.length || 0)
           preExtractedText = await callGoogleVisionOcr(base64, selectedFile.mimeType)
           console.log('[ARISE][OCR] Vision OCR text from upload:', preExtractedText)
           setUploadProgress(15)

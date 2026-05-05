@@ -3,30 +3,9 @@ import { Platform } from 'react-native'
 import { decode } from 'base64-arraybuffer'
 import { supabase } from './supabaseClient'
 
-export const RANGES = {
-  // Core CBC parameters
-  hemoglobin: { min: 12.0, max: 17.5, unit: 'g/dL' },
-  rbc: { min: 3.8, max: 6.1, unit: 'M/µL' },
-  wbc: { min: 4000, max: 11000, unit: '/µL' },
-  platelets: { min: 150000, max: 450000, unit: '/µL' },
-  // Extended CBC parameters
-  mcv: { min: 80, max: 100, unit: 'fL' },
-  mch: { min: 27, max: 33, unit: 'pg' },
-  mchc: { min: 32, max: 36, unit: 'g/dL' },
-  neutrophils: { min: 40, max: 75, unit: '%' },
-  lymphocytes: { min: 20, max: 40, unit: '%' },
-  esr: { min: 0, max: 20, unit: 'mm/hr' },
-}
-
-export function getStatusForValue(value, field) {
-  if (value === null || value === undefined || Number(value) <= 0) return 'unknown'
-  const range = RANGES[field]
-  if (!range) return 'unknown'
-  const { min, max } = range
-  if (value < min) return 'low'
-  if (value > max) return 'high'
-  return 'normal'
-}
+// ──────────────────────────────────────────────────────────────
+// BASE64 CONVERSION HELPERS
+// ──────────────────────────────────────────────────────────────
 
 /**
  * Read file and convert to base64 using fetch
@@ -50,9 +29,15 @@ async function readFileAsBase64ViaFetch(fileUri) {
   })
 }
 
+/**
+ * Read local file and convert to base64
+ * Uses expo-file-system on native, fetch fallback on web
+ */
 async function readFileAsBase64(fileUri) {
   const shouldUseFetchOnly =
-    Platform.OS === 'web' || /^blob:/i.test(String(fileUri || '')) || /^https?:/i.test(String(fileUri || ''))
+    Platform.OS === 'web' ||
+    /^blob:/i.test(String(fileUri || '')) ||
+    /^https?:/i.test(String(fileUri || ''))
 
   if (shouldUseFetchOnly) {
     console.log('[ARISE] Reading file via fetch/file-reader path:', fileUri)
@@ -119,12 +104,220 @@ async function fetchBase64ViaSignedUrl(filePath) {
   }
 }
 
-// ──────────────────────────────────────────────────────────────
-// AI PROVIDER ROUTING (Gemini + OpenRouter)
-// ──────────────────────────────────────────────────────────────
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1/models'
-const OPENROUTER_API_BASE = 'https://openrouter.ai/api/v1/chat/completions'
-const DEFAULT_GEMINI_MODEL_CANDIDATES = ['gemini-1.5-flash']
+export const RANGES = {
+  // Core CBC parameters
+  hemoglobin: { 
+    male: { min: 13.0, max: 17.0 },
+    female: { min: 12.0, max: 15.5 },
+    unit: 'g/dL' 
+  },
+  rbc: { min: 4.0, max: 6.0, unit: 'M/µL' },
+  wbc: { min: 4000, max: 11000, unit: '/µL' },
+  platelets: { min: 150000, max: 450000, unit: '/µL' },
+  // Extended CBC parameters
+  mcv: { min: 80, max: 100, unit: 'fL' },
+  mch: { min: 27, max: 32, unit: 'pg' },
+  mchc: { min: 32, max: 36, unit: 'g/dL' },
+  neutrophils: { min: 40, max: 75, unit: '%' },
+  lymphocytes: { min: 20, max: 40, unit: '%' },
+  esr: { min: 0, max: 20, unit: 'mm/hr' },
+}
+
+export function getStatusForValue(value, field, gender = 'female') {
+  if (value === null || value === undefined || Number(value) <= 0) return 'unknown'
+  const fieldRange = RANGES[field]
+  if (!fieldRange) return 'unknown'
+  
+  // Handle gender-specific ranges (hemoglobin)
+  let min, max
+  if (field === 'hemoglobin' && fieldRange.male && fieldRange.female) {
+    const rangeObj = gender === 'male' ? fieldRange.male : fieldRange.female
+    min = rangeObj.min
+    max = rangeObj.max
+  } else {
+    min = fieldRange.min
+    max = fieldRange.max
+  }
+  
+  if (value < min) return 'low'
+  if (value > max) return 'high'
+  return 'normal'
+}
+
+// Helper: Calculate deviation severity for scoring
+function calculateDeviationSeverity(value, field, gender = 'female') {
+  if (value === null || value === undefined) return null
+  
+  const fieldRange = RANGES[field]
+  if (!fieldRange) return null
+  
+  // Handle gender-specific ranges (hemoglobin)
+  let min, max
+  if (field === 'hemoglobin' && fieldRange.male && fieldRange.female) {
+    const rangeObj = gender === 'male' ? fieldRange.male : fieldRange.female
+    min = rangeObj.min
+    max = rangeObj.max
+  } else {
+    min = fieldRange.min
+    max = fieldRange.max
+  }
+  
+  const range = max - min
+  let deviationPercent = 0
+  
+  if (value < min) {
+    deviationPercent = ((min - value) / range) * 100
+  } else if (value > max) {
+    deviationPercent = ((value - max) / range) * 100
+  } else {
+    return null // Normal value - within range
+  }
+  
+  // More granular severity thresholds
+  if (deviationPercent <= 5) return 'mild'        // 0-5% deviation: -5 points
+  if (deviationPercent <= 20) return 'moderate'   // 5-20% deviation: -10 points
+  return 'severe'                                  // >20% deviation: -15 points
+}
+
+// Helper: Get point deduction for a severity level
+function getPointDeduction(severity) {
+  switch (severity) {
+    case 'mild': return 5
+    case 'moderate': return 10
+    case 'severe': return 15
+    default: return 0
+  }
+}
+
+function countDetectedValues(values) {
+  return Object.values(values || {}).filter((value) => !isUnavailable(value)).length
+}
+
+// Helper: Build abnormalities list with deviation info
+function buildAbnormalitiesList(values, gender = 'female') {
+  const abnormalities = []
+  const allFields = ['hemoglobin', 'rbc', 'wbc', 'platelets', 'mcv', 'mch', 'mchc', 'neutrophils', 'lymphocytes', 'esr']
+  
+  for (const field of allFields) {
+    const value = values[field]
+    if (isUnavailable(value)) continue
+    
+    const status = getStatusForValue(value, field, gender)
+    if (status === 'normal' || status === 'unknown') continue
+    
+    const severity = calculateDeviationSeverity(value, field, gender)
+    const fieldRange = RANGES[field]
+    let range = fieldRange
+    
+    // Get correct range for hemoglobin
+    if (field === 'hemoglobin' && fieldRange.male && fieldRange.female) {
+      range = gender === 'male' ? fieldRange.male : fieldRange.female
+    }
+    
+    const unit = fieldRange.unit
+    const min = range.min || fieldRange.min
+    const max = range.max || fieldRange.max
+    
+    const reason = generateAbnormalityReason(field, value, status, min, max, severity)
+    
+    abnormalities.push({
+      name: getSimpleFieldName(field),
+      value,
+      unit,
+      status,
+      severity: severity || 'none',
+      reason
+    })
+  }
+  
+  return abnormalities
+}
+
+// Helper: Generate reason for abnormality
+function generateAbnormalityReason(field, value, status, min, max, severity) {
+  const deviationPercent = status === 'low' 
+    ? Math.round(((min - value) / (max - min)) * 100)
+    : Math.round(((value - max) / (max - min)) * 100)
+  
+  const reasons = {
+    hemoglobin: {
+      low: `Hemoglobin is ${deviationPercent}% below normal range (${min}–${max}). This may indicate anemia.`,
+      high: `Hemoglobin is ${deviationPercent}% above normal range (${min}–${max}). This may indicate dehydration or polycythemia.`
+    },
+    rbc: {
+      low: `RBC is ${deviationPercent}% below normal (${min}–${max}). May indicate anemia or blood loss.`,
+      high: `RBC is ${deviationPercent}% above normal (${min}–${max}). May indicate dehydration or polycythemia.`
+    },
+    wbc: {
+      low: `WBC is ${deviationPercent}% below normal (${min}–${max}). May indicate immunodeficiency.`,
+      high: `WBC is ${deviationPercent}% above normal (${min}–${max}). May indicate infection or inflammation.`
+    },
+    platelets: {
+      low: `Platelets are ${deviationPercent}% below normal (${min}–${max}). May affect clotting ability.`,
+      high: `Platelets are ${deviationPercent}% above normal (${min}–${max}). May indicate thrombocytosis.`
+    },
+    mcv: {
+      low: `MCV is low (${value} fL). Indicates microcytic cells. May suggest iron deficiency.`,
+      high: `MCV is high (${value} fL). Indicates macrocytic cells. May suggest B12 or folate deficiency.`
+    },
+    mch: {
+      low: `MCH is low (${value} pg). May indicate hypochromic anemia.`,
+      high: `MCH is high (${value} pg). May indicate macrocytic or hyperchromic cells.`
+    },
+    mchc: {
+      low: `MCHC is low (${value} g/dL). May indicate hypochromic anemia.`,
+      high: `MCHC is high (${value} g/dL). May indicate spherocytosis.`
+    },
+    neutrophils: {
+      low: `Neutrophils are low (${value}%). May indicate immunosuppression.`,
+      high: `Neutrophils are high (${value}%). May indicate infection or stress.`
+    },
+    lymphocytes: {
+      low: `Lymphocytes are low (${value}%). May indicate immunodeficiency.`,
+      high: `Lymphocytes are high (${value}%). May indicate viral infection or leukemia.`
+    },
+    esr: {
+      low: `ESR is very low (${value} mm/hr). Unusual but may occur in certain conditions.`,
+      high: `ESR is elevated (${value} mm/hr). May indicate inflammation, infection, or autoimmune disease.`
+    }
+  }
+  
+  return (reasons[field]?.[status] || `${field} is ${status} (${min}–${max}).`) 
+}
+
+// Helper: Get simple field name for display
+function getSimpleFieldName(field) {
+  const names = {
+    hemoglobin: 'Hemoglobin',
+    rbc: 'RBC (Red Blood Cells)',
+    wbc: 'WBC (White Blood Cells)',
+    platelets: 'Platelets',
+    mcv: 'MCV (Cell Volume)',
+    mch: 'MCH (Cell Hemoglobin)',
+    mchc: 'MCHC (Hemoglobin Concentration)',
+    neutrophils: 'Neutrophils',
+    lymphocytes: 'Lymphocytes',
+    esr: 'ESR (Sedimentation Rate)'
+  }
+  return names[field] || field
+}
+
+function keepOnlyTextSupportedValues(values, rawText) {
+  const result = { ...values }
+  for (const field of ['hemoglobin', 'rbc', 'wbc', 'platelets']) {
+    if (!isUnavailable(result[field]) && !hasPatientValueEvidence(rawText, field)) {
+      console.warn(`[ARISE] Dropping unsupported ${field} value due to weak OCR evidence`)
+      result[field] = null
+    }
+  }
+
+  return result
+}
+const DEFAULT_GEMINI_MODEL_CANDIDATES = [
+  'google/gemini-2.0-flash-001',
+  'google/gemini-2.5-flash-lite',
+  'google/gemini-2.5-flash',
+]
 const DEFAULT_OPENROUTER_MODEL_CANDIDATES = [
   'google/gemini-2.0-flash-001',
   'google/gemini-2.5-flash-lite',
@@ -197,73 +390,58 @@ function toReadableError(err) {
     return 'AI analysis timed out. Please retry on a stable connection.'
   }
   if (/network request failed|failed to fetch|network/i.test(message)) {
-    return "You're offline or connection is unstable."
+    return 'Network error: your connection may be unstable. Please try again.'
   }
   return message
 }
 
-function geminiRequestToOpenRouterMessages(requestBody) {
-  const parts = requestBody?.contents?.[0]?.parts || []
-  const content = []
+function convertGeminiRequestToOpenRouterMessages(requestBody) {
+  const contents = Array.isArray(requestBody?.contents) ? requestBody.contents : []
 
-  for (const part of parts) {
-    if (part?.text) {
-      content.push({ type: 'text', text: part.text })
-    }
-    if (part?.inlineData?.data && part?.inlineData?.mimeType) {
-      content.push({
-        type: 'image_url',
-        image_url: {
-          url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`,
-        },
-      })
-    }
-  }
+  return contents
+    .map((content) => {
+      const parts = Array.isArray(content?.parts) ? content.parts : []
+      const mappedParts = parts
+        .map((part) => {
+          if (part?.text) {
+            return { type: 'text', text: String(part.text) }
+          }
 
-  return [{ role: 'user', content }]
+          const inlineData = part?.inlineData
+          if (inlineData?.data) {
+            const mimeType = inlineData?.mimeType || 'image/png'
+            return {
+              type: 'image_url',
+              image_url: {
+                url: `data:${mimeType};base64,${inlineData.data}`,
+              },
+            }
+          }
+
+          return null
+        })
+        .filter(Boolean)
+
+      if (!mappedParts.length) {
+        return null
+      }
+
+      return {
+        role: content?.role === 'system' ? 'system' : 'user',
+        content:
+          mappedParts.length === 1 && mappedParts[0].type === 'text'
+            ? mappedParts[0].text
+            : mappedParts,
+      }
+    })
+    .filter(Boolean)
 }
 
-function getOpenRouterMaxTokens(requestBody) {
-  const promptText = String(
-    requestBody?.contents?.[0]?.parts
-      ?.map((part) => part?.text || '')
-      .join(' ') || ''
-  ).toLowerCase()
-
-  if (/extract all visible report text exactly/.test(promptText)) {
-    return 2500
-  }
-  if (/return only a valid json object/.test(promptText)) {
-    return 450
-  }
-  if (/health summary/.test(promptText) || /under 120 words/.test(promptText)) {
-    return 320
+async function openRouterGenerateContent(apiKey, requestBody, timeoutMs = DEFAULT_AI_TIMEOUT_MS) {
+  if (!apiKey) {
+    throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is not configured')
   }
 
-  return 900
-}
-
-function extractOpenRouterText(payload) {
-  const content = payload?.choices?.[0]?.message?.content
-  if (typeof content === 'string') return content
-  if (Array.isArray(content)) {
-    return content
-      .map((item) => {
-        if (typeof item === 'string') return item
-        if (item?.type === 'text') return item?.text || ''
-        return ''
-      })
-      .join('')
-      .trim()
-  }
-  return ''
-}
-
-async function openRouterGenerateContent(
-  apiKey,
-  requestBody,
-  timeoutMs = DEFAULT_AI_TIMEOUT_MS
-) {
   const models = getModelCandidates(apiKey)
   let lastError = null
 
@@ -272,25 +450,21 @@ async function openRouterGenerateContent(
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
     try {
-      console.log(`[ARISE] Attempting OpenRouter with model: ${model}`)
+      console.log(`[ARISE] Attempting OpenRouter API with model: ${model}`)
 
-      const res = await fetch(OPENROUTER_API_BASE, {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'X-OpenRouter-Title': 'ARISE Mobile',
+          'HTTP-Referer': 'http://localhost',
+          'X-Title': 'ARISE',
         },
-        // Defensive fallback prevents runtime breakage if hot-reload serves stale scope.
-        // In normal flow, getOpenRouterMaxTokens is defined at module scope.
-        
         body: JSON.stringify({
           model,
-          max_tokens:
-            typeof getOpenRouterMaxTokens === 'function'
-              ? getOpenRouterMaxTokens(requestBody)
-              : 900,
-          messages: geminiRequestToOpenRouterMessages(requestBody),
+          messages: convertGeminiRequestToOpenRouterMessages(requestBody),
+          temperature: requestBody?.generationConfig?.temperature,
+          max_tokens: requestBody?.generationConfig?.maxOutputTokens,
         }),
         signal: controller.signal,
       })
@@ -298,36 +472,26 @@ async function openRouterGenerateContent(
       const json = await res.json()
 
       if (res.ok) {
-        const text = extractOpenRouterText(json)
-        if (text) {
-          console.log(`[ARISE] OpenRouter success with model: ${model}`)
-          return text
+        const content = json?.choices?.[0]?.message?.content ?? ''
+        if (Array.isArray(content)) {
+          return content.map((part) => part?.text || '').join('').trim()
         }
-        throw new Error('OpenRouter returned empty content')
+        return String(content || '').trim()
       }
 
-      const rawMessage = extractGeminiErrorMessage(json)
-      const apiMessage = normalizeOpenRouterError(res.status, rawMessage)
-      const isAuthError =
-        res.status === 401 ||
-        res.status === 403 ||
-        /authentication failed|verify EXPO_PUBLIC_GEMINI_API_KEY/i.test(apiMessage)
+      const apiMessage = normalizeOpenRouterError(
+        res.status,
+        extractGeminiErrorMessage(json) || json?.error?.message || json?.message
+      )
       const isModelUnavailable =
         res.status === 404 ||
-        ((res.status === 400 || res.status === 422) &&
-          /not a valid model id|invalid model|unknown model|model unavailable|not found/i.test(
-            String(rawMessage || apiMessage)
-          ))
+        /model unavailable|not found|not a valid model id|invalid model|unknown model/i.test(apiMessage)
       const isQuotaLimited =
-        res.status === 429 || /rate limit|quota|too many requests|insufficient credits|payment required/i.test(apiMessage)
-
-      if (isAuthError) {
-        throw new Error(apiMessage)
-      }
+        res.status === 429 || /rate limit|quota|too many requests/i.test(apiMessage)
 
       if (isModelUnavailable || isQuotaLimited) {
         console.warn(
-          `[ARISE] OpenRouter model ${model} ${isQuotaLimited ? 'quota-limited' : 'unavailable'}, trying next…`
+          `[ARISE] Model ${model} ${isQuotaLimited ? 'quota-limited' : 'unavailable'}, trying next…`
         )
         lastError = new Error(apiMessage)
         continue
@@ -335,24 +499,54 @@ async function openRouterGenerateContent(
 
       throw new Error(apiMessage || `OpenRouter error (${res.status})`)
     } catch (err) {
-      const friendly = toReadableError(err)
-      console.error(`[ARISE] OpenRouter model ${model} failed:`, friendly)
-
-      if (/openrouter authentication failed|verify EXPO_PUBLIC_GEMINI_API_KEY/i.test(String(friendly))) {
-        throw new Error(friendly)
+      if (/aborted|timed out|timeout/i.test(err?.message || '')) {
+        throw err
       }
 
-      if (/offline or connection is unstable|timed out/i.test(friendly)) {
-        throw new Error(friendly)
-      }
-
-      lastError = new Error(friendly)
+      const readable = normalizeOpenRouterError(0, err?.message || '')
+      console.warn(`[ARISE] OpenRouter attempt failed for model ${model}:`, readable)
+      lastError = err instanceof Error ? err : new Error(String(err || 'OpenRouter error'))
     } finally {
       clearTimeout(timeout)
     }
   }
 
   throw new Error(lastError?.message || 'All OpenRouter models unavailable. Please try again.')
+}
+
+function isUnavailable(value) {
+  return value === null || value === undefined || Number(value) <= 0
+}
+
+function normalizeFieldValue(fieldName, value) {
+  if (isUnavailable(value)) return null
+  const num = Number(value)
+  return Number.isNaN(num) ? null : num
+}
+
+function isReferenceRangeOnlyDocument(text) {
+  if (!text || typeof text !== 'string') return false
+  
+  const lines = text.split('\n').length
+  
+  // Check for common reference range indicators
+  const hasReferenceIndicators = /\breference\s+range|\bnormal\s+range|\breference\s+value|\bnormal\s+value/i.test(text)
+  const hasObservedValueColumn = /\bobserved\s+value\b|\bpatient\s+value\b|\bresult\s+value\b/i.test(text)
+  const hasMeasuredCBCValues = /\b(haemoglobin|hemoglobin|hgb|hb|rbc|wbc|white\s+blood\s+cell|leukocyte|platelet|neutrophils?|lymphocytes?)\b[^\n\d]{0,30}\d+(?:\.\d+)?/i.test(
+    text
+  )
+  const hasManyRanges = (text.match(/[-–]\s*\d+/g) || []).length > 5
+  
+  // If >40% of lines are ranges like "80-95", likely a reference table
+  const rangeLines = (text.match(/^\s*\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?/gm) || []).length
+  const isLikelyReferenceTable = rangeLines > lines * 0.4
+  
+  return (
+    hasReferenceIndicators &&
+    !hasObservedValueColumn &&
+    !hasMeasuredCBCValues &&
+    (hasManyRanges || isLikelyReferenceTable)
+  )
 }
 
 async function geminiGenerateContent(
@@ -500,25 +694,41 @@ Important conversion rules:
 // ──────────────────────────────────────────────────────────────
 // HEALTH SCORING (0 – 100)
 // ──────────────────────────────────────────────────────────────
-export function scoreHealth(values) {
-  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets']
+export function scoreHealth(values, gender = 'female') {
+  // Include all 10 CBC fields in scoring
+  const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets', 'mcv', 'mch', 'mchc', 'neutrophils', 'lymphocytes', 'esr']
   let score = 100
-  let known = 0
+  let detectedAbnormalities = 0
+  let totalDetected = 0
 
   for (const field of fields) {
-    const v = values[field]
-    if (isUnavailable(v)) continue
-    known++
-    const { min, max } = RANGES[field]
-    const range = max - min
-    if (v < min) {
-      score -= Math.min(25, Math.round(((min - v) / range) * 30))
-    } else if (v > max) {
-      score -= Math.min(25, Math.round(((v - max) / range) * 30))
+    const value = values[field]
+    
+    // Skip missing values - don't penalize
+    if (isUnavailable(value)) continue
+    
+    totalDetected++
+    
+    // Calculate deviation severity
+    const severity = calculateDeviationSeverity(value, field, gender)
+    
+    if (severity) {
+      detectedAbnormalities++
+      const deduction = getPointDeduction(severity)
+      score -= deduction
+      console.log(`[SCORE] ${field}: ${value} → ${severity} deviation → -${deduction} points (score now: ${score})`)
     }
   }
 
-  if (known === 0) return null
+  // If no values detected, return null (unknown)
+  if (totalDetected === 0) return null
+  
+  // Ensure score never stays at 100 if abnormalities exist
+  if (detectedAbnormalities > 0 && score === 100) {
+    score = 99
+  }
+  
+  // Return score capped at 0-100
   return Math.max(0, Math.min(100, score))
 }
 
@@ -531,18 +741,18 @@ export function scoreHealth(values) {
  */
 export function extractExtendedCBCFromText(ocrText) {
   if (!ocrText || typeof ocrText !== 'string') {
-    return {
-      hemoglobin: null,
-      rbc: null,
-      wbc: null,
-      platelets: null,
-      mcv: null,
-      mch: null,
-      mchc: null,
-      neutrophils: null,
-      lymphocytes: null,
-      esr: null,
-    }
+      return {
+        hemoglobin: null,
+        rbc: null,
+        wbc: null,
+        platelets: null,
+        mcv: null,
+        mch: null,
+        mchc: null,
+        neutrophils: null,
+        lymphocytes: null,
+        esr: null,
+      }
   }
 
   try {
@@ -573,17 +783,6 @@ export function extractExtendedCBCFromText(ocrText) {
 // ──────────────────────────────────────────────────────────────
 // AI SUMMARY GENERATION
 // ──────────────────────────────────────────────────────────────
-function getSimpleFieldName(field) {
-  const names = {
-    hemoglobin: 'blood strength',
-    rbc: 'red blood cells',
-    wbc: 'germ-fighting cells',
-    platelets: 'bleeding help cells',
-  }
-
-  return names[field] || 'blood count'
-}
-
 function getSimpleValueMeaning(field, status) {
   const meanings = {
     hemoglobin: {
@@ -715,6 +914,9 @@ function getSimpleSuggestions(field, status) {
 
 function getMissingValuesInsight() {
   return {
+    score: 0,
+    statusSummary: 'Unable to assess - insufficient data',
+    abnormalities: [],
     mainInsight: {
       title: 'Blood test numbers needed',
       message:
@@ -736,6 +938,15 @@ function getMissingValuesInsight() {
       },
     ],
   }
+}
+
+// Helper: Generate fallback bullets list
+function generateFallbackBullets(abnormalities) {
+  if (!abnormalities || abnormalities.length === 0) {
+    return ['All detected values are within normal ranges', 'Continue with regular health checkups']
+  }
+  
+  return abnormalities.slice(0, 2).map(a => `${a.name} (${a.value} ${a.unit}) is ${a.status}`)
 }
 
 function sanitizeStructuredSummary(parsed) {
@@ -879,7 +1090,7 @@ function generateFallbackSummary(values, score) {
  * @param {number} timeoutMs - Request timeout in milliseconds
  * @returns {object} Structured insight with mainInsight, bullets, suggestions
  */
-export async function generateAISummaryFromOCRText(ocrText, timeoutMs) {
+export async function generateAISummaryFromOCRText(ocrText, timeoutMs, gender = 'female') {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY
 
   if (!ocrText || typeof ocrText !== 'string' || !ocrText.trim()) {
@@ -888,8 +1099,8 @@ export async function generateAISummaryFromOCRText(ocrText, timeoutMs) {
   }
 
   try {
-    // Step 1: Extract CBC values dynamically from OCR text
-    console.log('[ARISE] Extracting CBC values from OCR text dynamically…')
+    // Step 1: Extract CBC values from OCR text
+    console.log('[ARISE] Extracting CBC values from OCR text…')
     const values = extractCBCValuesFromOCR(ocrText)
     const detectedCount = countDetectedValues(values)
 
@@ -899,70 +1110,98 @@ export async function generateAISummaryFromOCRText(ocrText, timeoutMs) {
     }
 
     // Step 2: Calculate health score from extracted values
-    const score = scoreHealth(values)
-    console.log('[ARISE] Calculated health score from extracted values:', score, 'detected fields:', detectedCount)
+    const score = scoreHealth(values, gender)
+    console.log('[ARISE] Health score:', score, '| Detected fields:', detectedCount)
 
-    // Step 3: Return fallback if no API key
+    // Step 3: Build abnormalities list
+    const abnormalities = buildAbnormalitiesList(values, gender)
+    console.log('[ARISE] Abnormalities detected:', abnormalities.length)
+
+    // Step 4: Build status summary
+    const statusSummary = buildStatusSummary(score, abnormalities)
+    console.log('[ARISE] Status summary:', statusSummary)
+
+    // Step 5: Return fallback if no API key
     if (!apiKey) {
       console.log('[ARISE] No API key, using fallback summary')
-      return generateFallbackSummary(values, score)
+      return {
+        score: score ?? 0,
+        statusSummary,
+        abnormalities,
+        mainInsight: generateFallbackMainInsight(abnormalities, score),
+        bullets: generateFallbackBullets(abnormalities),
+        suggestions: getSimpleSuggestions(abnormalities[0]?.name, abnormalities.length > 0 ? 'abnormal' : 'normal'),
+      }
     }
 
-    // Step 4: Format extracted values as structured data for Gemini
-    const valueLines = Object.entries(values)
-      .map(([k, v]) => {
-        if (isUnavailable(v)) return `${k}: not detected`
-        const { min, max, unit } = RANGES[k]
-        const status = getStatusForValue(v, k)
-        return `${k}: ${v} ${unit} (reference: ${min}–${max}, status: ${status})`
-      })
-      .join('\n')
+    // Step 6: Filter and format only non-null values for AI
+    const valuesToSend = Object.entries(values)
+      .filter(([, v]) => !isUnavailable(v))
+      .reduce((acc, [k, v]) => {
+        const status = getStatusForValue(v, k, gender)
+        const range = RANGES[k]
+        let unit = range.unit
+        let min, max
+        
+        if (k === 'hemoglobin' && range.male && range.female) {
+          const rangeObj = gender === 'male' ? range.male : range.female
+          min = rangeObj.min
+          max = rangeObj.max
+        } else {
+          min = range.min || range.min
+          max = range.max || range.max
+        }
+        
+        acc[k] = { value: v, unit, status, range: `${min}–${max}` }
+        return acc
+      }, {})
 
-    // Step 5: Build prompt with OCR context and structured values
-    const prompt = `You are a clinical health assistant analyzing a Complete Blood Count (CBC) report extracted via OCR.
+    console.log('[ARISE] Sending to AI only non-null values:', Object.keys(valuesToSend).length)
 
-The following CBC values were extracted from the patient's report:
+    // Step 7: Build AI prompt with only abnormal values mentioned
+    const abnormalOnly = abnormalities.map(a => 
+      `- ${a.name}: ${a.value} ${a.unit} (${a.status}) - ${a.reason}`
+    ).join('\n')
 
-${valueLines}
+    const normalCount = detectedCount - abnormalities.length
+    
+    const prompt = `You are a clinical health assistant analyzing a CBC (Complete Blood Count) report.
 
-Context from report text: "${ocrText.substring(0, 300)}${ocrText.length > 300 ? '...' : ''}"
+EXTRACTED VALUES (all non-null, detected values):
+${Object.entries(valuesToSend)
+  .map(([k, v]) => `${k}: ${v.value} ${v.unit} (normal range: ${v.range}, status: ${v.status})`)
+  .join('\n')}
 
-Based on these extracted values, return ONLY valid JSON in this exact shape:
+ABNORMAL VALUES DETECTED (${abnormalities.length}):
+${abnormalOnly || 'None - all values are normal'}
+
+NORMAL VALUES: ${normalCount}
+PATIENT HEALTH SCORE: ${score ?? 'unknown'}/100
+
+Your task: Analyze ONLY the values provided above. Generate a clinical assessment that:
+1. Mentions ONLY abnormal values
+2. Does NOT include null/missing values
+3. Keeps explanation to 2-3 sentences maximum
+4. Avoids medical diagnosis - focus on observations
+5. Uses simple, patient-friendly language
+6. Never hallucinate data not provided above
+
+Return ONLY valid JSON in this exact shape:
 {
-  "mainInsight": {
-    "title": "",
-    "message": "",
-    "severity": "low | moderate | high | normal"
-  },
-  "bullets": [
-    "specific finding 1",
-    "specific finding 2"
-  ],
-  "suggestions": [
-    {
-      "title": "",
-      "description": ""
-    }
-  ],
-  "confidenceNote": ""
+  "title": "Brief summary of main finding (max 10 words)",
+  "message": "2-3 sentence explanation based ONLY on provided values",
+  "severity": "normal|low|moderate|high",
+  "keyFindings": [
+    "specific abnormal finding 1",
+    "specific abnormal finding 2"
+  ]
 }
 
-Rules:
-- Base insights ONLY on the extracted values provided above
-- Keep insights short, clear, and user-friendly
-- Do not give medical prescriptions or diagnoses
-- Suggestions must be general lifestyle or home remedies only
-- If all values are normal, return a positive main insight
-- Prioritize the most important abnormal value for mainInsight: Hemoglobin > Platelets > WBC > RBC
-- Keep tone calm, supportive, and non-alarmist
-- If values seem unclear or conflicting, mention confidence concerns in confidenceNote
-- Return JSON only, no markdown, no extra text
+Important: If all values are normal, return severity="normal" with positive message.
+Return JSON only, no markdown, no extra text.`
 
-Patient health score: ${score ?? 'unknown'}/100
-Detected fields: ${detectedCount}/4`
-
-    // Step 6: Call Gemini with structured data
-    console.log('[ARISE] Sending structured CBC data to Gemini for analysis…')
+    // Step 8: Call AI with structured data
+    console.log('[ARISE] Sending structured CBC data to AI for analysis…')
     const text = await geminiGenerateContent(
       apiKey,
       {
@@ -971,23 +1210,86 @@ Detected fields: ${detectedCount}/4`
       timeoutMs
     )
 
-    // Step 7: Parse and return structured response
-    const parsed = parseStructuredSummary(text)
-    console.log('[ARISE] AI-generated insight:', parsed.mainInsight.title)
-    return parsed
+    // Step 9: Parse and enhance response
+    let aiResponse
+    try {
+      aiResponse = JSON.parse(text)
+    } catch (parseErr) {
+      console.warn('[ARISE] AI response parse failed, using fallback:', parseErr.message)
+      aiResponse = {
+        title: generateFallbackMainInsight(abnormalities, score),
+        message: buildStatusSummary(score, abnormalities),
+        severity: score >= 75 ? 'normal' : score >= 50 ? 'moderate' : 'high',
+        keyFindings: abnormalities.map(a => a.reason)
+      }
+    }
+
+    // Step 10: Return structured output
+    return {
+      score: score ?? 0,
+      statusSummary,
+      abnormalities,
+      mainInsight: {
+        title: aiResponse.title || 'Health Assessment',
+        message: aiResponse.message || statusSummary,
+        severity: aiResponse.severity || (score >= 75 ? 'normal' : 'high')
+      },
+      bullets: aiResponse.keyFindings || abnormalities.map(a => a.reason),
+      suggestions: getSimpleSuggestions(abnormalities[0]?.name, abnormalities.length > 0 ? 'abnormal' : 'normal'),
+      confidence: {
+        detectedFields: detectedCount,
+        abnormalitiesFound: abnormalities.length,
+        assessmentReliable: detectedCount >= 4
+      }
+    }
   } catch (error) {
     console.warn('[ARISE] AI summary generation failed:', error.message)
     
-    // Fallback: Return best-effort insight using extracted values
+    // Fallback: Return best-effort summary using extracted values
     try {
       const values = extractCBCValuesFromOCR(ocrText)
-      const score = scoreHealth(values)
-      return generateFallbackSummary(values, score)
+      const score = scoreHealth(values, gender)
+      const abnormalities = buildAbnormalitiesList(values, gender)
+      const statusSummary = buildStatusSummary(score, abnormalities)
+      
+      return {
+        score: score ?? 0,
+        statusSummary,
+        abnormalities,
+        mainInsight: {
+          title: generateFallbackMainInsight(abnormalities, score),
+          message: statusSummary,
+          severity: score >= 75 ? 'normal' : 'high'
+        },
+        bullets: abnormalities.map(a => a.reason),
+        suggestions: getSimpleSuggestions(abnormalities[0]?.name, abnormalities.length > 0 ? 'abnormal' : 'normal'),
+      }
     } catch (fallbackError) {
       console.error('[ARISE] Fallback failed:', fallbackError.message)
       return getMissingValuesInsight()
     }
   }
+}
+
+// Helper: Build status summary string
+function buildStatusSummary(score, abnormalities) {
+  if (abnormalities.length === 0) {
+    return `All detected CBC values are within normal ranges. Health score: ${score || 'N/A'}/100`
+  }
+  
+  const abnormalNames = abnormalities.slice(0, 2).map(a => a.name).join(', ')
+  const moreText = abnormalities.length > 2 ? ` and ${abnormalities.length - 2} more` : ''
+  return `${abnormalNames}${moreText} ${abnormalities.length === 1 ? 'is' : 'are'} outside normal range. Health score: ${score || 'N/A'}/100`
+}
+
+// Helper: Build fallback main insight
+function generateFallbackMainInsight(abnormalities, score) {
+  if (abnormalities.length === 0) {
+    return 'Blood values look normal'
+  }
+  
+  const topAbnormality = abnormalities[0]
+  return `${topAbnormality.name} is ${topAbnormality.status}`
 }
 
 /**
@@ -1179,7 +1481,7 @@ export async function analyzeReport({
 
       if (extractedText) {
         if (isReferenceRangeOnlyDocument(extractedText)) {
-          throw new Error('Reference range table detected; no patient result values found.')
+          console.warn('[ARISE] Reference-range heuristic matched, but continuing because the report may still contain measured patient values.')
         }
 
         values = extractExtendedCBCFromText(extractedText)
@@ -1218,6 +1520,15 @@ export async function analyzeReport({
     const hasDetectedValues = Object.values(summaryValues).some((v) => !isUnavailable(v))
     score = scoreHealth(summaryValues)
     console.log('[ARISE] Health score:', score)
+    
+    // Log what was detected
+    if (!hasDetectedValues) {
+      console.warn('[ARISE] ⚠️  No CBC values detected in extracted text')
+      console.warn('[ARISE] Extracted text sample:', extractedText?.substring(0, 200))
+    } else {
+      const detectedCount = Object.entries(values).filter(([, v]) => !isUnavailable(v)).length
+      console.log(`[ARISE] ✓ Detected ${detectedCount} CBC values`)
+    }
 
     try {
       summary = extractedText
@@ -1372,82 +1683,12 @@ function parseScaledNumber(raw, field) {
   return n
 }
 
-function normalizeFieldValue(field, value) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) {
-    return null
-  }
-
-  let v = Number(value)
-
-  // Core parameters
-  if (field === 'hemoglobin') {
-    if (v > 0 && v <= 40) return Number(v.toFixed(2))
-    return null
-  }
-
-  if (field === 'rbc') {
-    if (v > 0 && v <= 20) return Number(v.toFixed(2))
-    if (v > 1000000) return Number((v / 1000000).toFixed(2))
-    return null
-  }
-
-  if (field === 'wbc') {
-    if (v > 0 && v < 200) v = v * 1000
-    if (v > 0 && v <= 200000) return Math.round(v)
-    return null
-  }
-
-  if (field === 'platelets') {
-    if (v > 0 && v < 1000) v = v * 1000
-    if (v > 0 && v <= 2000000) return Math.round(v)
-    return null
-  }
-
-  // Extended parameters
-  if (field === 'mcv') {
-    if (v > 0 && v <= 150) return Number(v.toFixed(2))
-    return null
-  }
-
-  if (field === 'mch') {
-    if (v > 0 && v <= 50) return Number(v.toFixed(2))
-    return null
-  }
-
-  if (field === 'mchc') {
-    if (v > 0 && v <= 50) return Number(v.toFixed(2))
-    return null
-  }
-
-  if (field === 'neutrophils') {
-    if (v >= 0 && v <= 100) return Number(v.toFixed(1))
-    return null
-  }
-
-  if (field === 'lymphocytes') {
-    if (v >= 0 && v <= 100) return Number(v.toFixed(1))
-    return null
-  }
-
-  if (field === 'esr') {
-    if (v >= 0 && v <= 200) return Number(v.toFixed(1))
-    return null
-  }
-
-  return null
-}
-
-/**
- * Enhanced CBC extraction supporting 10 parameters
- * Line-by-line OCR parsing with lookahead for split label/value formats
- * Returns object with all fields; missing values are null
- * Maintains backward compatibility with core 4 parameters
- */
 function extractCBCValuesFromOCR(ocrText) {
   const lines = String(ocrText || '')
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
+  const text = lines.join('\n')
 
   console.log('[PARSER] Split OCR lines array:', lines.length, 'lines')
 
@@ -1464,82 +1705,167 @@ function extractCBCValuesFromOCR(ocrText) {
     esr: null,
   }
 
-  // Helper: extract first number from a line
-  function extractNumberFromLine(line) {
-    const match = line.match(/(\d+(?:\.\d+)?)/)
+  function extractNum(textValue) {
+    const match = String(textValue).match(/(\d+(?:\.\d+)?)/)
     return match ? parseFloat(match[1]) : null
   }
 
-  // Helper: set value only if valid and not already set
-  function setIfFound(field, value, transform = (v) => v) {
-    if (value === null || value === undefined || values[field] !== null) return
-    const transformed = transform(value)
-    if (transformed !== null && transformed !== undefined) {
-      values[field] = transformed
-      console.log(`[VALUES] ${field} = ${transformed}`)
+  // IMPROVED HELPER: Extract numeric value from current or next few lines
+  function extractNextNumber(startIndex, maxLinesToCheck = 2) {
+    if (startIndex < 0 || startIndex >= lines.length) {
+      return null
     }
+
+    // Check current line first
+    const currentLine = lines[startIndex] || ''
+    let num = extractNum(currentLine)
+    if (num !== null) {
+      console.log(`[EXTRACT] Found number on same line: "${currentLine.substring(0, 60)}" → ${num}`)
+      return num
+    }
+
+    // Check next 1-2 lines
+    for (let offset = 1; offset <= maxLinesToCheck && startIndex + offset < lines.length; offset++) {
+      const nextLine = lines[startIndex + offset] || ''
+
+      // Skip empty lines and lines that are clearly labels/headers (all alphabetic)
+      if (!nextLine.trim() || /^[a-zA-Z\s()]*$/.test(nextLine)) {
+        continue
+      }
+
+      num = extractNum(nextLine)
+      if (num !== null) {
+        console.log(`[EXTRACT] Found number on line +${offset}: "${nextLine.substring(0, 60)}" → ${num}`)
+        return num
+      }
+    }
+
+    return null
   }
 
-  // Process each line independently with strict patterns
-  lines.forEach((line) => {
-    const lowerLine = line.toLowerCase()
-    const num = extractNumberFromLine(line)
-    if (num === null) return
+  // Process each line looking for field labels
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const lineLower = line.toLowerCase()
 
-    // Hemoglobin
-    if (/\bhemoglobin\b|\bhgb\b|\bHb\b/i.test(line)) {
-      setIfFound('hemoglobin', num)
+    // HEMOGLOBIN / HGB
+    if ((lineLower.includes('haemoglobin') || lineLower.includes('hemoglobin') || lineLower.includes('hgb')) && values.hemoglobin === null) {
+      const val = extractNextNumber(i)
+      if (val !== null) {
+        values.hemoglobin = normalizeFieldValue('hemoglobin', val)
+        console.log(`[EXTRACT] hemoglobin = ${values.hemoglobin} (from: "${line}")`)
+      }
+      continue
     }
 
-    // RBC
-    if (/\brbc\b|\bred\s+blood\s+cell\b|\berythrocyte\b/i.test(line)) {
-      setIfFound('rbc', num)
+    // RBC / RED BLOOD CELLS
+    if ((lineLower.includes('rbc') || lineLower.includes('red blood cell') || lineLower.includes('erythrocyte')) && values.rbc === null) {
+      const val = extractNextNumber(i)
+      if (val !== null) {
+        values.rbc = normalizeFieldValue('rbc', val)
+        console.log(`[EXTRACT] rbc = ${values.rbc} (from: "${line}")`)
+      }
+      continue
     }
 
-    // WBC (normalize if needed)
-    if (/\bwbc\b|\btlc\b|\bwhite\s+blood\s+cell\b|\bleukocyte\b/i.test(line)) {
-      const normalized = /thou|k\/mm|k\/ul/i.test(line) ? num * 1000 : num
-      setIfFound('wbc', normalized)
+    // WBC / LEUKOCYTE / TLC
+    if ((lineLower.includes('wbc') || lineLower.includes('leukocyte') || lineLower.includes('total leukocyte count') || lineLower.includes('tlc') || lineLower.includes('white blood cell')) && values.wbc === null) {
+      let wbcVal = extractNextNumber(i)
+      if (wbcVal !== null) {
+        // WBC is often reported in thousands (e.g., 5.5 means 5500)
+        const contextWindow = lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 5)).join(' ').toLowerCase()
+        const hasThousandMarker = /thou|k\/mm|k\/ul|×\s*10\^?3|x\s*10\^?3|10\^3|\/ul|\bk\b/.test(contextWindow)
+        if (hasThousandMarker && wbcVal < 1000) {
+          console.log(`[EXTRACT] WBC scaling: ${wbcVal} × 1000 = ${Math.round(wbcVal * 1000)} (detected: ${contextWindow.substring(0, 40)})`)
+          wbcVal = Math.round(wbcVal * 1000)
+        }
+        values.wbc = normalizeFieldValue('wbc', wbcVal)
+        console.log(`[EXTRACT] wbc = ${values.wbc} (from: "${line}")`)
+      }
+      continue
     }
 
-    // Platelets
-    if (/\bplatelet\b|\bplt\b/i.test(line)) {
-      setIfFound('platelets', num)
+    // PLATELETS
+    if ((lineLower.includes('platelet') || lineLower.includes('plt')) && values.platelets === null) {
+      let plateletVal = extractNextNumber(i)
+      if (plateletVal !== null) {
+        // Platelets are often reported in thousands (e.g., 180 means 180000)
+        const contextWindow = lines.slice(Math.max(0, i - 1), Math.min(lines.length, i + 5)).join(' ').toLowerCase()
+        const hasThousandMarker = /thou|k\/mm|k\/ul|×\s*10\^?3|x\s*10\^?3|10\^3|\/ul|\bk\b/.test(contextWindow)
+        if (hasThousandMarker && plateletVal < 1000) {
+          console.log(`[EXTRACT] Platelets scaling: ${plateletVal} × 1000 = ${Math.round(plateletVal * 1000)} (detected: ${contextWindow.substring(0, 40)})`)
+          plateletVal = Math.round(plateletVal * 1000)
+        }
+        values.platelets = normalizeFieldValue('platelets', plateletVal)
+        console.log(`[EXTRACT] platelets = ${values.platelets} (from: "${line}")`)
+      }
+      continue
     }
 
-    // MCV (must NOT match MCHC)
-    if (/\bmcv\b/i.test(line) && !/mchc/i.test(line)) {
-      setIfFound('mcv', num)
+    // MCV
+    if ((lineLower.includes('mcv') || lineLower.includes('mean corpuscular volume')) && values.mcv === null) {
+      const val = extractNextNumber(i)
+      if (val !== null) {
+        values.mcv = normalizeFieldValue('mcv', val)
+        console.log(`[EXTRACT] mcv = ${values.mcv} (from: "${line}")`)
+      }
+      continue
     }
 
-    // MCHC (strict word boundary)
-    if (/\bmchc\b/i.test(line)) {
-      setIfFound('mchc', num)
+    // MCH
+    if ((lineLower.includes('mch') && !lineLower.includes('mchc')) || lineLower.includes('mean corpuscular hemoglobin')) {
+      if (values.mch === null) {
+        const val = extractNextNumber(i)
+        if (val !== null) {
+          values.mch = normalizeFieldValue('mch', val)
+          console.log(`[EXTRACT] mch = ${values.mch} (from: "${line}")`)
+        }
+      }
+      continue
     }
 
-    // MCH (strict word boundary, must NOT match MCHC)
-    if (/\bmch\b(?!c)/i.test(line)) {
-      setIfFound('mch', num)
+    // MCHC
+    if ((lineLower.includes('mchc') || lineLower.includes('mean corpuscular hemoglobin concentration')) && values.mchc === null) {
+      const val = extractNextNumber(i)
+      if (val !== null) {
+        values.mchc = normalizeFieldValue('mchc', val)
+        console.log(`[EXTRACT] mchc = ${values.mchc} (from: "${line}")`)
+      }
+      continue
     }
 
-    // Neutrophils
-    if (/\bneutrophil\b/i.test(line)) {
-      setIfFound('neutrophils', num)
+    // NEUTROPHILS
+    if ((lineLower.includes('neutrophil') || lineLower.includes('segmented neutrophil')) && !lineLower.includes('band') && values.neutrophils === null) {
+      const val = extractNextNumber(i)
+      if (val !== null) {
+        values.neutrophils = normalizeFieldValue('neutrophils', val)
+        console.log(`[EXTRACT] neutrophils = ${values.neutrophils} (from: "${line}")`)
+      }
+      continue
     }
 
-    // Lymphocytes
-    if (/\blymphocyte\b/i.test(line)) {
-      setIfFound('lymphocytes', num)
+    // LYMPHOCYTES
+    if ((lineLower.includes('lymphocyte') || lineLower.includes('lymph')) && !lineLower.includes('monocyte') && values.lymphocytes === null) {
+      const val = extractNextNumber(i)
+      if (val !== null) {
+        values.lymphocytes = normalizeFieldValue('lymphocytes', val)
+        console.log(`[EXTRACT] lymphocytes = ${values.lymphocytes} (from: "${line}")`)
+      }
+      continue
     }
 
     // ESR
-    if (/\besr\b|\bsedimentation\s+rate\b/i.test(line)) {
-      setIfFound('esr', num)
+    if ((lineLower.includes('esr') || lineLower.includes('erythrocyte sedimentation rate') || lineLower.includes('sedimentation rate')) && values.esr === null) {
+      const val = extractNextNumber(i)
+      if (val !== null) {
+        values.esr = normalizeFieldValue('esr', val)
+        console.log(`[EXTRACT] esr = ${values.esr} (from: "${line}")`)
+      }
+      continue
     }
-  })
+  }
 
-  console.log('[VALUES] Final extracted:', JSON.stringify(values, null, 2))
-
+  console.log('[VALUES] Final extracted CBC values:', JSON.stringify(values, null, 2))
   return values
 }
 
@@ -1584,70 +1910,6 @@ function hasPatientValueEvidence(rawText, field) {
   return false
 }
 
-function keepOnlyTextSupportedValues(values, rawText) {
-  const result = { ...values }
-  for (const field of ['hemoglobin', 'rbc', 'wbc', 'platelets']) {
-    if (!isUnavailable(result[field]) && !hasPatientValueEvidence(rawText, field)) {
-      console.warn(`[ARISE] Dropping unsupported ${field} value due to weak OCR evidence`)
-      result[field] = null
-    }
-  }
-  return result
-}
-
-function withZeroFallback(values) {
-  return {
-    hemoglobin: values.hemoglobin ?? 0,
-    rbc: values.rbc ?? 0,
-    wbc: values.wbc ?? 0,
-    platelets: values.platelets ?? 0,
-  }
-}
-
-function countDetectedValues(values) {
-  return Object.values(values).reduce(
-    (count, value) => (isUnavailable(value) ? count : count + 1),
-    0
-  )
-}
-
-function mergeValues(primary, fallback) {
-  const primaryDetected = countDetectedValues(primary)
-  const fallbackDetected = countDetectedValues(fallback)
-  if (primaryDetected === 0 && fallbackDetected > 0) return fallback
-
-  return {
-    hemoglobin: primary.hemoglobin ?? fallback.hemoglobin ?? null,
-    rbc: primary.rbc ?? fallback.rbc ?? null,
-    wbc: primary.wbc ?? fallback.wbc ?? null,
-    platelets: primary.platelets ?? fallback.platelets ?? null,
-  }
-}
-
-function isReferenceRangeOnlyDocument(rawText) {
-  const text = String(rawText || '').toLowerCase()
-  if (!text.trim()) return false
-
-  const hasRangeTerms =
-    /(normal range|reference range|range \(male\)|range \(female\)|male|female)/i.test(
-      text
-    )
-  const hasManyRanges = (text.match(/\d+(?:\.\d+)?\s*[-–]\s*\d+(?:\.\d+)?/g) || []).length >= 4
-  const hasCbcLabels = /(hemoglobin|rbc|wbc|platelet|mcv|mch|mchc|hematocrit|rdw)/i.test(
-    text
-  )
-  const hasResultTerms =
-    /(result|value|observed|patient|test report|investigation|findings|units?)/i.test(
-      text
-    )
-
-  return hasRangeTerms && hasManyRanges && hasCbcLabels && !hasResultTerms
-}
-
-function isUnavailable(value) {
-  return value === null || value === undefined || Number(value) <= 0
-}
-
 /**
  * Call Google Vision OCR (DOCUMENT_TEXT_DETECTION) with a base64 image payload.
  * Returns extracted plain text, or an empty string when OCR is unavailable.
@@ -1662,10 +1924,29 @@ export async function callGoogleVisionOcr(imageBase64, mimeType) {
   try {
     if (!imageBase64) return ''
 
+    // Accept both raw base64 and data-URL forms. Google Vision expects raw base64
+    let cleanBase64 = String(imageBase64 || '').trim()
+    if (cleanBase64.startsWith('data:')) {
+      // Extract base64 after the comma, handling various data URL formats
+      const commaIndex = cleanBase64.indexOf(',')
+      if (commaIndex !== -1) {
+        cleanBase64 = cleanBase64.substring(commaIndex + 1).trim()
+      } else {
+        console.warn('[ARISE] Vision OCR: Invalid data URL format (no comma found)')
+        return ''
+      }
+    }
+
+    // Validate base64 string - should only contain base64 characters and no whitespace
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(cleanBase64)) {
+      console.warn('[ARISE] Vision OCR: Invalid base64 characters detected')
+      return ''
+    }
+
     const body = {
       requests: [
         {
-          image: { content: imageBase64 },
+          image: { content: cleanBase64 },
           features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
         },
       ],
