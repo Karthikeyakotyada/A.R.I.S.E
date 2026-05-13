@@ -25,6 +25,12 @@ CREATE TABLE public.report_analysis (
   rbc          numeric,
   wbc          numeric,
   platelets    numeric,
+  mcv          numeric,
+  mch          numeric,
+  mchc         numeric,
+  neutrophils  numeric,
+  lymphocytes  numeric,
+  esr          numeric,
   health_score integer,
   ai_summary   text,
   analyzed_at  timestamptz NOT NULL DEFAULT now()

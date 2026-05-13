@@ -2,6 +2,7 @@
   "expo": {
     "name": "ARISE Mobile",
     "slug": "arise-mobile",
+    "scheme": "arise",
     "version": "1.0.0",
     "icon": "./assets/app-logo.png",
     "splash": {

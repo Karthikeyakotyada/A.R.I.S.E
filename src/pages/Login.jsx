@@ -29,12 +29,22 @@ const SpinnerIcon = () => (
   </svg>
 )
 
+const GoogleIcon = () => (
+  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M23 12.25c0-.92-.06-1.81-.19-2.68H12v5.07h6.19c-.27 1.39-.91 2.6-1.93 3.39v2.46h3.13c1.83-1.68 2.88-4.16 2.88-7.24z" fill="#4285F4" />
+    <path d="M12 23.5c2.6 0 4.77-.87 6.36-2.35l-3.13-2.46c-.87.58-1.99.93-3.23.93-2.48 0-4.58-1.67-5.33-3.91H3.66v2.53C5.25 22.38 8.38 23.5 12 23.5z" fill="#34A853" />
+    <path d="M6.67 14.81c-.19-.58-.3-1.19-.3-1.81s.11-1.23.3-1.81V8.66H3.66C2.98 10.09 2.6 11.5 2.6 13c0 1.5.38 2.91 1.06 4.34l3.01-2.53z" fill="#FBBC04" />
+    <path d="M12 4.5c1.4 0 2.66.48 3.65 1.41l2.73-2.73C16.76.99 14.6 0 12 0 8.38 0 5.25 1.12 3.66 3.34l3.01 2.53c.75-2.24 2.85-3.37 5.33-3.37z" fill="#EA4335" />
+  </svg>
+)
+
 export default function Login() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState('')
 
   const handleLogin = async (e) => {
@@ -59,11 +69,49 @@ export default function Login() {
         return
       }
 
+      // Session will be handled by AuthContext listening to onAuthStateChange
       navigate('/dashboard', { replace: true })
     } catch (err) {
       setError('An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setError('')
+    setGoogleLoading(true)
+
+    try {
+      // Log for debugging
+      console.log('Starting Google OAuth with redirectTo:', window.location.origin)
+
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,  // Simpler redirect URL first
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      })
+
+      console.log('OAuth response:', { data, oauthError })
+
+      if (oauthError) {
+        console.error('OAuth error details:', oauthError)
+        setError(`OAuth Error: ${oauthError.message || 'Failed to sign in with Google'}`)
+        setGoogleLoading(false)
+        return
+      }
+
+      // If we get here without error, redirect should happen automatically
+      // Don't reset loading - let the redirect happen
+    } catch (err) {
+      console.error('Google sign in error:', err)
+      setError(`Error: ${err.message || 'An error occurred during Google sign in'}`)
+      setGoogleLoading(false)
     }
   }
 
@@ -99,6 +147,35 @@ export default function Login() {
             </div>
           )}
 
+          {/* Google Sign-In Button */}
+          <button
+            onClick={handleGoogleSignIn}
+            disabled={googleLoading || loading}
+            className="w-full flex justify-center items-center gap-3 py-3 px-4 mb-4 border-2 border-slate-200 rounded-xl text-slate-700 font-semibold text-sm hover:bg-slate-50 hover:border-slate-300 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {googleLoading ? (
+              <>
+                <SpinnerIcon />
+                <span>Signing in...</span>
+              </>
+            ) : (
+              <>
+                <GoogleIcon />
+                <span>Continue with Google</span>
+              </>
+            )}
+          </button>
+
+          {/* Divider */}
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-slate-100" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="px-3 bg-white text-slate-400">Or continue with email</span>
+            </div>
+          </div>
+
           <form onSubmit={handleLogin} className="space-y-5">
             {/* Email */}
             <div>
@@ -113,6 +190,7 @@ export default function Login() {
                 required
                 autoComplete="email"
                 autoFocus
+                disabled={googleLoading}
               />
             </div>
 
@@ -129,12 +207,14 @@ export default function Login() {
                   className="input-field pr-12"
                   required
                   autoComplete="current-password"
+                  disabled={googleLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  disabled={googleLoading}
                 >
                   {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
                 </button>
@@ -144,7 +224,7 @@ export default function Login() {
             {/* Submit */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || googleLoading}
               className="btn-primary mt-2"
             >
               {loading ? (

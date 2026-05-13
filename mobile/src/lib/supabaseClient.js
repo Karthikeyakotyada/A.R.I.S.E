@@ -54,6 +54,51 @@ export async function runAuthRequestWithRecovery(request) {
   return request()
 }
 
+function parseOAuthCallbackUrl(redirectUrl) {
+  if (!redirectUrl) return {}
+
+  const parsed = new URL(redirectUrl)
+  const query = Object.fromEntries(parsed.searchParams.entries())
+  const hash = parsed.hash.startsWith('#') ? parsed.hash.slice(1) : parsed.hash
+  const hashParams = hash
+    ? Object.fromEntries(new URLSearchParams(hash).entries())
+    : {}
+
+  return {
+    ...query,
+    ...hashParams,
+  }
+}
+
+export async function finalizeOAuthRedirect(redirectUrl) {
+  const params = parseOAuthCallbackUrl(redirectUrl)
+
+  if (params.error || params.error_description) {
+    throw new Error(String(params.error_description || params.error || 'OAuth sign-in failed.'))
+  }
+
+  if (params.access_token && params.refresh_token) {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: String(params.access_token),
+      refresh_token: String(params.refresh_token),
+    })
+
+    if (error) throw error
+    return data?.session ?? null
+  }
+
+  const authCode = params.code
+  if (authCode) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(String(authCode))
+    if (error) throw error
+    return data?.session ?? null
+  }
+
+  const { data, error } = await supabase.auth.getSession()
+  if (error) throw error
+  return data?.session ?? null
+}
+
 export async function ensureValidSession() {
   try {
     const { data, error } = await supabase.auth.getSession()

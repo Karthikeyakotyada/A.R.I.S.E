@@ -1515,6 +1515,12 @@ export async function analyzeReport({
       rbc: values.rbc,
       wbc: values.wbc,
       platelets: values.platelets,
+      mcv: values.mcv,
+      mch: values.mch,
+      mchc: values.mchc,
+      neutrophils: values.neutrophils,
+      lymphocytes: values.lymphocytes,
+      esr: values.esr,
     }
 
     const hasDetectedValues = Object.values(summaryValues).some((v) => !isUnavailable(v))

@@ -1,4 +1,4 @@
-import { ActivityIndicator, Text, View } from 'react-native'
+import { ActivityIndicator, Platform, Text, View } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { Ionicons } from '@expo/vector-icons'
@@ -14,6 +14,7 @@ import AnalysisHistoryScreen from '../screens/AnalysisHistoryScreen'
 import HealthLogsScreen from '../screens/HealthLogsScreen'
 import ProfileScreen from '../screens/ProfileScreen'
 import EditProfileScreen from '../screens/EditProfileScreen'
+import AuthCallbackScreen from '../screens/AuthCallbackScreen'
 
 const Stack = createNativeStackNavigator()
 const Tab = createBottomTabNavigator()
@@ -95,6 +96,13 @@ function LoadingSplash() {
 
 export default function RootNavigator() {
   const { user, loading } = useAuth()
+
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const { pathname } = window.location
+    if (pathname === '/auth/callback') {
+      return <AuthCallbackScreen />
+    }
+  }
 
   if (loading) {
     return <LoadingSplash />

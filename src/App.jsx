@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import AppShell from './components/AppShell'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import AuthCallback from './pages/AuthCallback'
 import Dashboard from './pages/Dashboard'
 import UploadReport from './pages/UploadReport'
 import Reports from './pages/Reports'
@@ -29,6 +30,9 @@ export default function App() {
 
   return (
     <Routes>
+      {/* OAuth callback handler (explicit route helps hybrid/local setups) */}
+      <Route path="/auth/callback" element={<AuthCallback />} />
+
       {/* Public routes */}
       <Route
         path="/login"

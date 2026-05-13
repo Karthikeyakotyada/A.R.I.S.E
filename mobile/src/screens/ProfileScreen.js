@@ -23,9 +23,11 @@ export default function ProfileScreen({ navigation }) {
   const [profileError, setProfileError] = useState('')
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarSheetVisible, setAvatarSheetVisible] = useState(false)
-  const [avatarSheetOpenedAt, setAvatarSheetOpenedAt] = useState(0)
-  const [previewVisible, setPreviewVisible] = useState(false)
+  const [cropVisible, setCropVisible] = useState(false)
   const [pendingAvatarUri, setPendingAvatarUri] = useState(null)
+  const [pendingAvatarWidth, setPendingAvatarWidth] = useState(0)
+  const [pendingAvatarHeight, setPendingAvatarHeight] = useState(0)
+  const [avatarRotation, setAvatarRotation] = useState(0)
   const [preparingAvatar, setPreparingAvatar] = useState(false)
 
   const currentAvatarUrl = profileData
@@ -144,9 +146,8 @@ export default function ProfileScreen({ navigation }) {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
         quality: 1,
       })
 
@@ -155,30 +156,11 @@ export default function ProfileScreen({ navigation }) {
       const selected = result.assets[0]
       if (!selected?.uri) return
 
-      setPreparingAvatar(true)
-
-      const width = Number(selected.width || 0)
-      const height = Number(selected.height || 0)
-      const actions = []
-
-      if (width > 0 && height > 0 && width !== height) {
-        const size = Math.min(width, height)
-        const originX = Math.max(0, Math.floor((width - size) / 2))
-        const originY = Math.max(0, Math.floor((height - size) / 2))
-        actions.push({ crop: { originX, originY, width: size, height: size } })
-      }
-
-      const processed = await manipulateAsync(
-        selected.uri,
-        actions,
-        {
-          compress: 0.72,
-          format: SaveFormat.JPEG,
-        }
-      )
-
-      setPendingAvatarUri(processed.uri)
-      setPreviewVisible(true)
+      setPendingAvatarUri(selected.uri)
+      setPendingAvatarWidth(Number(selected.width || 0))
+      setPendingAvatarHeight(Number(selected.height || 0))
+      setAvatarRotation(0)
+      setCropVisible(true)
     } catch (err) {
       await showMessage({
         title: 'Image Error',
@@ -190,12 +172,35 @@ export default function ProfileScreen({ navigation }) {
     }
   }
 
-  const handleUploadPreparedAvatar = async () => {
-    if (!user || !pendingAvatarUri) return
+  const handleUploadPreparedAvatar = async (avatarUri, rotation = 0, width = 0, height = 0) => {
+    if (!user || !avatarUri) return
 
     setUploadingAvatar(true)
     try {
-      const response = await fetch(pendingAvatarUri)
+      const manipulations = []
+      if (rotation) {
+        manipulations.push({ rotate: rotation })
+      }
+
+      const rotatedWidth = rotation % 180 === 0 ? width : height
+      const rotatedHeight = rotation % 180 === 0 ? height : width
+      if (rotatedWidth > 0 && rotatedHeight > 0 && rotatedWidth !== rotatedHeight) {
+        const size = Math.min(rotatedWidth, rotatedHeight)
+        const originX = Math.max(0, Math.floor((rotatedWidth - size) / 2))
+        const originY = Math.max(0, Math.floor((rotatedHeight - size) / 2))
+        manipulations.push({ crop: { originX, originY, width: size, height: size } })
+      }
+
+      const processed = await manipulateAsync(
+        avatarUri,
+        manipulations,
+        {
+          compress: 0.72,
+          format: SaveFormat.JPEG,
+        }
+      )
+
+      const response = await fetch(processed.uri)
       const blob = await response.blob()
       const fileName = `${user.id}.jpg`
 
@@ -252,8 +257,11 @@ export default function ProfileScreen({ navigation }) {
       })
 
       showToast('Profile picture updated!', 'success')
-      setPreviewVisible(false)
+      setCropVisible(false)
       setPendingAvatarUri(null)
+      setPendingAvatarWidth(0)
+      setPendingAvatarHeight(0)
+      setAvatarRotation(0)
       setProfileData((prev) => ({ ...(prev || {}), avatar_url: versionedUrl }))
       await loadProfile()
     } catch (err) {
@@ -269,75 +277,48 @@ export default function ProfileScreen({ navigation }) {
 
   const handleAvatarPress = () => {
     if (uploadingAvatar) return
-    const openedAt = Date.now()
-    setAvatarSheetOpenedAt(openedAt)
-    setTimeout(() => {
-      setAvatarSheetVisible(true)
-    }, 70)
+    setAvatarSheetVisible(true)
   }
 
-  const isAvatarSheetActionReady = () => Date.now() - avatarSheetOpenedAt > 240
+  const handleRotateAvatar = () => {
+    setAvatarRotation((current) => (current + 90) % 360)
+  }
 
-  const handleRemoveAvatar = async () => {
-    if (!user?.id) return
+  const handleCloseCrop = () => {
+    if (uploadingAvatar) return
+    setCropVisible(false)
+    setPendingAvatarUri(null)
+    setPendingAvatarWidth(0)
+    setPendingAvatarHeight(0)
+    setAvatarRotation(0)
+  }
 
-    const confirm = await showConfirm({
-      title: 'Remove Photo',
-      message: 'Remove your current profile photo?',
-      tone: 'warning',
-      confirmLabel: 'Remove',
-      cancelLabel: 'Cancel',
-    })
-
-    if (!confirm) return
-
-    setUploadingAvatar(true)
+  const handleNextCrop = async () => {
+    if (!pendingAvatarUri || preparingAvatar || uploadingAvatar) return
+    setPreparingAvatar(true)
     try {
-      const fileName = `${user.id}.jpg`
-      await supabase.storage.from(AVATAR_BUCKET).remove([fileName])
-
-      const { error: dbError } = await supabase
-        .from('profiles')
-        .upsert(
-          { id: user.id, avatar_url: null },
-          { onConflict: 'id' }
-        )
-
-      if (dbError) {
-        await showMessage({
-          title: 'Remove Failed',
-          message: dbError.message,
-          tone: 'error',
-        })
-        return
-      }
-
-      await supabase.auth.updateUser({
-        data: {
-          ...(user?.user_metadata || {}),
-          avatar_url: null,
-        },
-      })
-
-      showToast('Profile photo removed.', 'success')
-      setPreviewVisible(false)
-      setPendingAvatarUri(null)
-      setProfileData((prev) => ({ ...(prev || {}), avatar_url: null }))
-      await loadProfile()
-    } catch (err) {
-      await showMessage({
-        title: 'Remove Failed',
-        message: err?.message || 'Could not remove photo.',
-        tone: 'error',
-      })
+      await handleUploadPreparedAvatar(
+        pendingAvatarUri,
+        avatarRotation,
+        pendingAvatarWidth,
+        pendingAvatarHeight
+      )
     } finally {
-      setUploadingAvatar(false)
+      setPreparingAvatar(false)
     }
   }
 
   async function handleSignOut() {
-    await signOut()
-    showToast('Signed out successfully.', 'success')
+    try {
+      await signOut()
+      showToast('Signed out successfully.', 'success')
+    } catch (error) {
+      await showMessage({
+        title: 'Sign Out Failed',
+        message: error?.message || 'Could not sign out right now. Please try again.',
+        tone: 'error',
+      })
+    }
   }
 
   return (
@@ -467,43 +448,29 @@ export default function ProfileScreen({ navigation }) {
           <Pressable style={styles.sheetBackdrop} onPress={() => setAvatarSheetVisible(false)} />
           <View style={styles.sheetCard}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Profile Photo</Text>
+            <Text style={styles.sheetTitle}>Change profile picture</Text>
+
+            <View style={styles.sheetAvatarWrap}>
+              {currentAvatarUrl ? (
+                <Image source={{ uri: currentAvatarUrl }} style={styles.sheetAvatarImage} />
+              ) : (
+                <Text style={styles.sheetAvatarFallback}>{initials}</Text>
+              )}
+              <View style={styles.sheetAvatarBadge}>
+                <MaterialCommunityIcons name="camera-outline" size={18} color="#ffffff" />
+              </View>
+            </View>
 
             <Pressable
-              style={({ pressed }) => [styles.sheetActionButton, pressed && styles.sheetActionPressed]}
+              style={({ pressed }) => [styles.sourceButton, pressed && styles.sheetActionPressed]}
               onPress={async () => {
-                if (!isAvatarSheetActionReady()) return
+                if (uploadingAvatar || preparingAvatar) return
                 setAvatarSheetVisible(false)
                 await pickAndPrepareAvatar()
               }}
             >
-              <MaterialCommunityIcons name="image-plus" size={18} color="#0f766e" />
-              <Text style={styles.sheetActionText}>Upload new photo</Text>
-            </Pressable>
-
-            {hasAvatar ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.sheetActionButton,
-                  styles.sheetDangerButton,
-                  pressed && styles.sheetActionPressed,
-                ]}
-                onPress={async () => {
-                  if (!isAvatarSheetActionReady()) return
-                  setAvatarSheetVisible(false)
-                  await handleRemoveAvatar()
-                }}
-              >
-                <MaterialCommunityIcons name="trash-can-outline" size={18} color="#dc2626" />
-                <Text style={styles.sheetDangerText}>Remove current photo</Text>
-              </Pressable>
-            ) : null}
-
-            <Pressable
-              style={({ pressed }) => [styles.sheetCancelButton, pressed && styles.sheetActionPressed]}
-              onPress={() => setAvatarSheetVisible(false)}
-            >
-              <Text style={styles.sheetCancelText}>Cancel</Text>
+              <MaterialCommunityIcons name="image-outline" size={18} color="#e5e7eb" />
+              <Text style={styles.sourceButtonText}>Upload from Device</Text>
             </Pressable>
           </View>
         </View>
@@ -511,68 +478,60 @@ export default function ProfileScreen({ navigation }) {
 
       <Modal
         transparent
-        visible={previewVisible}
+        visible={cropVisible}
         animationType="fade"
-        onRequestClose={() => {
-          if (uploadingAvatar) return
-          setPreviewVisible(false)
-          setPendingAvatarUri(null)
-        }}
+        onRequestClose={handleCloseCrop}
       >
-        <View style={styles.previewBackdropHost}>
-          <Pressable
-            style={styles.previewBackdrop}
-            onPress={() => {
-              if (uploadingAvatar) return
-              setPreviewVisible(false)
-              setPendingAvatarUri(null)
-            }}
-          />
+        <View style={styles.cropBackdropHost}>
+          <Pressable style={styles.cropBackdrop} onPress={handleCloseCrop} />
 
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>Preview Photo</Text>
-            <Subtle style={styles.previewSubtitle}>Adjust looks good? Save to update your profile.</Subtle>
-
-            <View style={styles.previewAvatarWrap}>
-              {pendingAvatarUri ? (
-                <Image source={{ uri: pendingAvatarUri }} style={styles.previewAvatarImage} />
-              ) : (
-                <Text style={styles.previewAvatarFallback}>{initials}</Text>
-              )}
+          <View style={styles.cropCard}>
+            <View style={styles.cropTopRow}>
+              <Pressable style={styles.cropCloseButton} onPress={handleCloseCrop} accessibilityLabel="Close profile picture">
+                <MaterialCommunityIcons name="close" size={32} color="#cbd5e1" />
+              </Pressable>
+              <Text style={styles.cropTitle}>Crop & rotate</Text>
+              <MaterialCommunityIcons name="dots-vertical" size={26} color="#cbd5e1" />
             </View>
 
-            <View style={styles.previewActionsRow}>
-              <Pressable
-                style={({ pressed }) => [styles.previewGhostBtn, pressed && styles.sheetActionPressed]}
-                onPress={async () => {
-                  if (uploadingAvatar || preparingAvatar) return
-                  await pickAndPrepareAvatar()
-                }}
-              >
-                <Text style={styles.previewGhostText}>Reselect</Text>
-              </Pressable>
+            <View style={styles.cropPreviewArea}>
+              <View style={styles.cropStage}>
+                <View style={styles.cropFrame}>
+                  {pendingAvatarUri ? (
+                    <Image
+                      source={{ uri: pendingAvatarUri }}
+                      style={[
+                        styles.cropPreviewImage,
+                        { transform: [{ rotate: `${avatarRotation}deg` }] },
+                      ]}
+                    />
+                  ) : (
+                    <Text style={styles.cropFallback}>{initials}</Text>
+                  )}
+                </View>
+              </View>
+            </View>
 
+            <View style={styles.cropRotateWrap}>
               <Pressable
-                style={({ pressed }) => [styles.previewGhostBtn, pressed && styles.sheetActionPressed]}
-                onPress={() => {
-                  if (uploadingAvatar) return
-                  setPreviewVisible(false)
-                  setPendingAvatarUri(null)
-                }}
+                style={({ pressed }) => [styles.rotateButton, pressed && styles.sheetActionPressed]}
+                onPress={handleRotateAvatar}
+                disabled={uploadingAvatar || preparingAvatar}
               >
-                <Text style={styles.previewGhostText}>Cancel</Text>
+                <MaterialCommunityIcons name="rotate-right" size={18} color="#cbd5e1" />
+                <Text style={styles.rotateButtonText}>Rotate</Text>
               </Pressable>
             </View>
 
             <Pressable
-              style={({ pressed }) => [styles.previewSaveBtn, pressed && styles.sheetActionPressed]}
-              onPress={handleUploadPreparedAvatar}
-              disabled={uploadingAvatar || !pendingAvatarUri}
+              style={({ pressed }) => [styles.nextButton, pressed && styles.sheetActionPressed]}
+              onPress={handleNextCrop}
+              disabled={uploadingAvatar || preparingAvatar || !pendingAvatarUri}
             >
-              {uploadingAvatar ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+              {uploadingAvatar || preparingAvatar ? (
+                <ActivityIndicator size="small" color="#1d4ed8" />
               ) : (
-                <Text style={styles.previewSaveText}>Use this photo</Text>
+                <Text style={styles.nextButtonText}>Next</Text>
               )}
             </Pressable>
           </View>
@@ -818,161 +777,203 @@ const styles = StyleSheet.create({
   },
   sheetBackdropHost: {
     flex: 1,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
   },
   sheetBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(2,6,23,0.45)',
   },
   sheetCard: {
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 22,
+    backgroundColor: '#161616',
     borderWidth: 1,
-    borderColor: '#dbe7e5',
-    paddingHorizontal: 16,
+    borderColor: '#232323',
+    paddingHorizontal: 18,
     paddingTop: 10,
-    paddingBottom: 22,
-    gap: 10,
+    paddingBottom: 20,
+    gap: 14,
   },
   sheetHandle: {
     alignSelf: 'center',
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: '#cbd5e1',
+    backgroundColor: '#374151',
     marginBottom: 4,
   },
   sheetTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0f172a',
-    marginBottom: 2,
+    color: '#e5e7eb',
+    fontSize: 20,
+    fontWeight: '400',
+    textAlign: 'center',
   },
-  sheetActionButton: {
-    minHeight: 50,
-    borderRadius: 12,
+  sheetAvatarWrap: {
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    alignSelf: 'center',
+    backgroundColor: '#090909',
+    borderWidth: 8,
+    borderColor: '#111111',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+    marginTop: 6,
+  },
+  sheetAvatarImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  sheetAvatarFallback: {
+    color: '#ffffff',
+    fontSize: 54,
+    fontWeight: '800',
+  },
+  sheetAvatarBadge: {
+    position: 'absolute',
+    right: 18,
+    bottom: 18,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#191919',
+    borderWidth: 3,
+    borderColor: '#272727',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sourceButton: {
+    minHeight: 72,
+    borderRadius: 10,
+    backgroundColor: '#121212',
     borderWidth: 1,
-    borderColor: '#d9ece8',
-    backgroundColor: '#f6fbfa',
+    borderColor: '#1f1f1f',
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
-  sheetDangerButton: {
-    borderColor: '#fecaca',
-    backgroundColor: '#fef2f2',
+  sourceButtonText: {
+    color: '#e5e7eb',
+    fontSize: 16,
+    fontWeight: '600',
   },
   sheetActionPressed: {
     opacity: 0.85,
     transform: [{ scale: 0.995 }],
   },
-  sheetActionText: {
-    color: '#0b3b36',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  sheetDangerText: {
-    color: '#991b1b',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  sheetCancelButton: {
-    minHeight: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#ffffff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  sheetCancelText: {
-    color: '#334155',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  previewBackdropHost: {
+  cropBackdropHost: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 18,
-  },
-  previewBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(2,6,23,0.45)',
-  },
-  previewCard: {
-    width: '100%',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#d9e8e5',
-    backgroundColor: '#ffffff',
     padding: 16,
-    gap: 10,
   },
-  previewTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0f172a',
+  cropBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  previewSubtitle: {
-    marginTop: -2,
-    marginBottom: 2,
+  cropCard: {
+    width: '100%',
+    maxWidth: 560,
+    borderRadius: 28,
+    backgroundColor: '#121212',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 18,
+    gap: 14,
   },
-  previewAvatarWrap: {
-    width: 180,
-    height: 180,
-    borderRadius: 999,
-    alignSelf: 'center',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#d7e6e2',
-    backgroundColor: '#f3faf8',
+  cropTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cropCloseButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 4,
+    borderColor: '#7dd3fc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#121212',
+  },
+  cropTitle: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#f3f4f6',
+    fontSize: 20,
+    fontWeight: '400',
+    marginHorizontal: 8,
+  },
+  cropPreviewArea: {
+    minHeight: 360,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  previewAvatarImage: {
-    width: '100%',
-    height: '100%',
+  cropStage: {
+    width: 330,
+    height: 330,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0d0d0d',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  cropFrame: {
+    width: 260,
+    height: 260,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    backgroundColor: '#000000',
+  },
+  cropPreviewImage: {
+    width: '110%',
+    height: '110%',
     resizeMode: 'cover',
   },
-  previewAvatarFallback: {
-    color: '#0f766e',
-    fontSize: 42,
-    fontWeight: '800',
-  },
-  previewActionsRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  previewGhostBtn: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewGhostText: {
-    color: '#334155',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  previewSaveBtn: {
-    minHeight: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0f766e',
-    marginTop: 2,
-  },
-  previewSaveText: {
+  cropFallback: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: 54,
     fontWeight: '800',
+  },
+  cropRotateWrap: {
+    alignItems: 'center',
+  },
+  rotateButton: {
+    width: 92,
+    minHeight: 96,
+    borderRadius: 8,
+    backgroundColor: '#1f1f1f',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#2b2b2b',
+  },
+  rotateButtonText: {
+    color: '#e5e7eb',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  nextButton: {
+    minHeight: 54,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#a7c7ff',
+  },
+  nextButtonText: {
+    color: '#1e3a8a',
+    fontSize: 17,
+    fontWeight: '500',
   },
 })

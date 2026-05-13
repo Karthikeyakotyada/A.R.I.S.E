@@ -13,9 +13,13 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
+import * as Linking from 'expo-linking'
+import * as WebBrowser from 'expo-web-browser'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useDialog } from '../context/DialogContext'
-import { supabase } from '../lib/supabaseClient'
+import { finalizeOAuthRedirect, supabase } from '../lib/supabaseClient'
+
+WebBrowser.maybeCompleteAuthSession()
 
 const APP_LOGO = require('../../assets/app-logo.png')
 const FONT_FAMILY = Platform.select({
@@ -36,6 +40,7 @@ export default function SignupScreen({ navigation }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [focusedField, setFocusedField] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
 
   const canSubmit = useMemo(() => {
     return form.name.trim() && form.email.trim() && form.password && form.confirmPassword
@@ -101,6 +106,38 @@ export default function SignupScreen({ navigation }) {
     }
   }
 
+  async function handleGoogleSignup() {
+    setGoogleLoading(true)
+    try {
+      const redirectTo = Linking.createURL('auth/callback')
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      })
+
+      if (error) throw error
+      if (!data?.url) throw new Error('Could not start Google sign in. Please try again.')
+
+      const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
+      if (authResult.type !== 'success' || !authResult.url) {
+        return
+      }
+
+      await finalizeOAuthRedirect(authResult.url)
+    } catch (error) {
+      await showMessage({
+        title: 'Google Sign-In Failed',
+        message: error?.message || 'Please try again.',
+        tone: 'error',
+      })
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <LinearGradient
@@ -146,7 +183,7 @@ export default function SignupScreen({ navigation }) {
                     placeholder="Full name"
                     placeholderTextColor="#7A8794"
                     autoCapitalize="words"
-                    editable={!loading}
+                    editable={!loading && !googleLoading}
                     value={form.name}
                     onFocus={() => setFocusedField('name')}
                     onBlur={() => setFocusedField('')}
@@ -175,7 +212,7 @@ export default function SignupScreen({ navigation }) {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    editable={!loading}
+                    editable={!loading && !googleLoading}
                     value={form.email}
                     onFocus={() => setFocusedField('email')}
                     onBlur={() => setFocusedField('')}
@@ -202,7 +239,7 @@ export default function SignupScreen({ navigation }) {
                     placeholder="Min. 6 characters"
                     placeholderTextColor="#7A8794"
                     secureTextEntry={!showPassword}
-                    editable={!loading}
+                    editable={!loading && !googleLoading}
                     value={form.password}
                     onFocus={() => setFocusedField('password')}
                     onBlur={() => setFocusedField('')}
@@ -211,7 +248,7 @@ export default function SignupScreen({ navigation }) {
                   <TouchableOpacity
                     style={styles.eyeButton}
                     onPress={() => setShowPassword((prev) => !prev)}
-                    disabled={loading}
+                    disabled={loading || googleLoading}
                   >
                     <MaterialCommunityIcons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
@@ -240,7 +277,7 @@ export default function SignupScreen({ navigation }) {
                     placeholder="Re-enter password"
                     placeholderTextColor="#7A8794"
                     secureTextEntry={!showConfirmPassword}
-                    editable={!loading}
+                    editable={!loading && !googleLoading}
                     value={form.confirmPassword}
                     onFocus={() => setFocusedField('confirmPassword')}
                     onBlur={() => setFocusedField('')}
@@ -249,7 +286,7 @@ export default function SignupScreen({ navigation }) {
                   <TouchableOpacity
                     style={styles.eyeButton}
                     onPress={() => setShowConfirmPassword((prev) => !prev)}
-                    disabled={loading}
+                    disabled={loading || googleLoading}
                   >
                     <MaterialCommunityIcons
                       name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
@@ -263,10 +300,10 @@ export default function SignupScreen({ navigation }) {
               <TouchableOpacity
                 style={[
                   styles.primaryButton,
-                  (!canSubmit || loading) && styles.primaryButtonDisabled,
+                  (!canSubmit || loading || googleLoading) && styles.primaryButtonDisabled,
                 ]}
                 onPress={handleSignup}
-                disabled={!canSubmit || loading}
+                disabled={!canSubmit || loading || googleLoading}
                 activeOpacity={0.88}
               >
                 {loading ? (
@@ -276,9 +313,31 @@ export default function SignupScreen({ navigation }) {
                 )}
               </TouchableOpacity>
 
+              <View style={styles.oauthSeparator}>
+                <View style={styles.oauthSeparatorLine} />
+                <Text style={styles.oauthSeparatorText}>OR</Text>
+                <View style={styles.oauthSeparatorLine} />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.googleButton, googleLoading && styles.googleButtonDisabled]}
+                onPress={handleGoogleSignup}
+                disabled={loading || googleLoading}
+                activeOpacity={0.88}
+              >
+                {googleLoading ? (
+                  <ActivityIndicator size="small" color="#111827" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="google" size={20} color="#ea4335" />
+                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
               <View style={styles.footerRow}>
                 <Text style={styles.footerRowText}>Already have an account? </Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Login')} disabled={loading}>
+                <TouchableOpacity onPress={() => navigation.navigate('Login')} disabled={loading || googleLoading}>
                   <Text style={styles.footerRowLink}>Sign In</Text>
                 </TouchableOpacity>
               </View>
@@ -417,6 +476,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 40,
+  },
+  oauthSeparator: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  oauthSeparatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.28)',
+  },
+  oauthSeparatorText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '700',
+    marginHorizontal: 12,
+  },
+  googleButton: {
+    width: '100%',
+    minHeight: 54,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 28,
+    elevation: 3,
+  },
+  googleButtonDisabled: {
+    opacity: 0.75,
+  },
+  googleButtonText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
   },
   footerRowText: {
     fontFamily: FONT_FAMILY,

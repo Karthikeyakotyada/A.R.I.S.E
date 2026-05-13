@@ -24,6 +24,37 @@ function toNullableNumber(value) {
   return Number.isFinite(n) ? n : null
 }
 
+function validateHeartRate(value) {
+  const n = toNullableNumber(value)
+  if (n === null) return null
+  if (n < 20 || n > 200) return null // Unrealistic heart rate
+  return n
+}
+
+function validateBloodPressure(value) {
+  if (!value || typeof value !== 'string') return null
+  const match = value.trim().match(/^(\d+)\s*\/\s*(\d+)$/)
+  if (!match) return null
+  const systolic = Number(match[1])
+  const diastolic = Number(match[2])
+  if (systolic < 50 || systolic > 250 || diastolic < 30 || diastolic > 150) return null
+  return value.trim()
+}
+
+function validateBloodSugar(value) {
+  const n = toNullableNumber(value)
+  if (n === null) return null
+  if (n < 30 || n > 500) return null // Unrealistic blood sugar
+  return n
+}
+
+function validateTemperature(value) {
+  const n = toNullableNumber(value)
+  if (n === null) return null
+  if (n < 95 || n > 105) return null // Unrealistic body temperature (F)
+  return n
+}
+
 export default function HealthLogsScreen() {
   const { user } = useAuth()
   const { showMessage } = useDialog()
@@ -39,10 +70,76 @@ export default function HealthLogsScreen() {
   const [bloodSugar, setBloodSugar] = useState('')
   const [temperature, setTemperature] = useState('')
   const [symptoms, setSymptoms] = useState('')
+  const [errors, setErrors] = useState({})
 
   const canSave = useMemo(() => {
     return heartRate || bloodPressure.trim() || bloodSugar || temperature || symptoms.trim()
   }, [heartRate, bloodPressure, bloodSugar, temperature, symptoms])
+
+  const trendIndicators = useMemo(() => {
+    if (!logs || logs.length < 2) {
+      return { heartRate: { arrow: '→', color: '#6b7280' }, bloodPressure: { arrow: '→', color: '#6b7280' }, bloodSugar: { arrow: '→', color: '#6b7280' }, temperature: { arrow: '→', color: '#6b7280' } }
+    }
+
+    const latest = logs[0]
+    const validHeartRates = logs.filter(log => log.heart_rate && log.heart_rate > 0)
+    const validBPs = logs.filter(log => log.blood_pressure && typeof log.blood_pressure === 'string')
+    const validSugars = logs.filter(log => log.blood_sugar && log.blood_sugar > 0)
+    const validTemps = logs.filter(log => log.temperature && log.temperature > 0)
+
+    // Heart Rate trend
+    let hrTrend = { arrow: '→', color: '#6b7280' }
+    if (validHeartRates.length >= 2 && latest.heart_rate) {
+      const avgHR = validHeartRates.reduce((sum, log) => sum + log.heart_rate, 0) / validHeartRates.length
+      if (latest.heart_rate > avgHR + 5) {
+        hrTrend = { arrow: '↑', color: '#ef4444' } // trending up (high)
+      } else if (latest.heart_rate < avgHR - 5) {
+        hrTrend = { arrow: '↓', color: '#10b981' } // trending down (good)
+      }
+    }
+
+    // Blood Pressure trend (compare systolic)
+    let bpTrend = { arrow: '→', color: '#6b7280' }
+    if (validBPs.length >= 2 && latest.blood_pressure) {
+      const latestMatch = latest.blood_pressure.match(/^(\d+)\s*\/\s*(\d+)$/)
+      if (latestMatch) {
+        const latestSystolic = Number(latestMatch[1])
+        const avgSystolic = validBPs.reduce((sum, log) => {
+          const m = log.blood_pressure.match(/^(\d+)\s*\/\s*(\d+)$/)
+          return sum + (m ? Number(m[1]) : 0)
+        }, 0) / validBPs.length
+        if (latestSystolic > avgSystolic + 5) {
+          bpTrend = { arrow: '↑', color: '#ef4444' }
+        } else if (latestSystolic < avgSystolic - 5) {
+          bpTrend = { arrow: '↓', color: '#10b981' }
+        }
+      }
+    }
+
+    // Blood Sugar trend
+    let sugarTrend = { arrow: '→', color: '#6b7280' }
+    if (validSugars.length >= 2 && latest.blood_sugar) {
+      const avgSugar = validSugars.reduce((sum, log) => sum + log.blood_sugar, 0) / validSugars.length
+      if (latest.blood_sugar > avgSugar + 5) {
+        sugarTrend = { arrow: '↑', color: '#ef4444' }
+      } else if (latest.blood_sugar < avgSugar - 5) {
+        sugarTrend = { arrow: '↓', color: '#10b981' }
+      }
+    }
+
+    // Temperature trend
+    let tempTrend = { arrow: '→', color: '#6b7280' }
+    if (validTemps.length >= 2 && latest.temperature) {
+      const avgTemp = validTemps.reduce((sum, log) => sum + log.temperature, 0) / validTemps.length
+      if (latest.temperature > avgTemp + 0.5) {
+        tempTrend = { arrow: '↑', color: '#ef4444' }
+      } else if (latest.temperature < avgTemp - 0.5) {
+        tempTrend = { arrow: '↓', color: '#10b981' }
+      }
+    }
+
+    return { heartRate: hrTrend, bloodPressure: bpTrend, bloodSugar: sugarTrend, temperature: tempTrend }
+  }, [logs])
 
   const fetchLogs = useCallback(async () => {
     if (!user) return
@@ -82,14 +179,45 @@ export default function HealthLogsScreen() {
       return
     }
 
+    // Validate inputs
+    const newErrors = {}
+    
+    if (heartRate && !validateHeartRate(heartRate)) {
+      newErrors.heartRate = 'Heart rate must be between 20-200 bpm'
+    }
+    
+    if (bloodPressure && !validateBloodPressure(bloodPressure)) {
+      newErrors.bloodPressure = 'Format: 120/80 (systolic/diastolic)'
+    }
+    
+    if (bloodSugar && !validateBloodSugar(bloodSugar)) {
+      newErrors.bloodSugar = 'Blood sugar must be between 30-500 mg/dL'
+    }
+    
+    if (temperature && !validateTemperature(temperature)) {
+      newErrors.temperature = 'Temperature must be between 95-105°F'
+    }
+
+    // Show validation errors
+    if (Object.keys(newErrors).length > 0) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
+      setErrors(newErrors)
+      const errorMsg = Object.values(newErrors).join('\n')
+      showToast('Please fix the errors', 'warning')
+      setBanner({ tone: 'warning', message: 'Please check your input values.' })
+      await showMessage({ title: 'Validation Error', message: errorMsg, tone: 'warning' })
+      return
+    }
+
+    setErrors({})
     setSaving(true)
     try {
       const { error } = await supabase.from('health_logs').insert({
         user_id: user.id,
-        heart_rate: toNullableNumber(heartRate),
-        blood_pressure: bloodPressure.trim() || null,
-        blood_sugar: toNullableNumber(bloodSugar),
-        temperature: toNullableNumber(temperature),
+        heart_rate: validateHeartRate(heartRate),
+        blood_pressure: validateBloodPressure(bloodPressure),
+        blood_sugar: validateBloodSugar(bloodSugar),
+        temperature: validateTemperature(temperature),
         symptoms: symptoms.trim() || null,
       })
 
@@ -129,26 +257,45 @@ export default function HealthLogsScreen() {
 
       <View style={styles.quickStatsSection}>
         <Text style={styles.sectionTitle}>Quick Stats Preview</Text>
+        <Text style={styles.quickStatsHint}>
+          Trend indicators: ↑ trending up, ↓ trending down, → stable.
+        </Text>
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
             <MaterialCommunityIcons name="heart-pulse" size={22} color="#dc2626" />
-            <Text style={styles.statValue}>78 bpm</Text>
-            <Text style={styles.statLabel}>Heart Rate</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.statLabel}>Heart Rate</Text>
+              <Text style={[styles.trendArrow, { color: trendIndicators.heartRate.color }]}>
+                {trendIndicators.heartRate.arrow}
+              </Text>
+            </View>
           </View>
           <View style={styles.statCard}>
             <MaterialCommunityIcons name="heart-box-outline" size={22} color="#0284c7" />
-            <Text style={styles.statValue}>120/80</Text>
-            <Text style={styles.statLabel}>Blood Pressure</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.statLabel}>Blood Pressure</Text>
+              <Text style={[styles.trendArrow, { color: trendIndicators.bloodPressure.color }]}>
+                {trendIndicators.bloodPressure.arrow}
+              </Text>
+            </View>
           </View>
           <View style={styles.statCard}>
             <MaterialCommunityIcons name="water" size={22} color="#16a34a" />
-            <Text style={styles.statValue}>110</Text>
-            <Text style={styles.statLabel}>Blood Sugar</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.statLabel}>Blood Sugar</Text>
+              <Text style={[styles.trendArrow, { color: trendIndicators.bloodSugar.color }]}>
+                {trendIndicators.bloodSugar.arrow}
+              </Text>
+            </View>
           </View>
           <View style={styles.statCard}>
             <MaterialCommunityIcons name="thermometer" size={22} color="#f59e0b" />
-            <Text style={styles.statValue}>98.6 F</Text>
-            <Text style={styles.statLabel}>Temperature</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.statLabel}>Temperature</Text>
+              <Text style={[styles.trendArrow, { color: trendIndicators.temperature.color }]}>
+                {trendIndicators.temperature.arrow}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
@@ -163,28 +310,32 @@ export default function HealthLogsScreen() {
           <MaterialCommunityIcons name="heart-pulse" size={20} color="#dc2626" style={styles.fieldIcon} />
           <View style={styles.fieldContent}>
             <Text style={styles.fieldLabel}>Heart Rate</Text>
-            <TextInput value={heartRate} onChangeText={setHeartRate} style={styles.input} placeholder="Heart Rate (bpm)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} keyboardType="numeric" />
+            <TextInput value={heartRate} onChangeText={setHeartRate} style={[styles.input, errors.heartRate && styles.inputError]} placeholder="Heart Rate (bpm)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} keyboardType="numeric" />
+            {errors.heartRate ? <Text style={styles.errorText}>{errors.heartRate}</Text> : null}
           </View>
         </View>
         <View style={styles.fieldWrap}>
           <MaterialCommunityIcons name="heart-box-outline" size={20} color="#0284c7" style={styles.fieldIcon} />
           <View style={styles.fieldContent}>
             <Text style={styles.fieldLabel}>Blood Pressure</Text>
-            <TextInput value={bloodPressure} onChangeText={setBloodPressure} style={styles.input} placeholder="Blood Pressure (e.g. 120/80)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} />
+            <TextInput value={bloodPressure} onChangeText={setBloodPressure} style={[styles.input, errors.bloodPressure && styles.inputError]} placeholder="Blood Pressure (e.g. 120/80)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} />
+            {errors.bloodPressure ? <Text style={styles.errorText}>{errors.bloodPressure}</Text> : null}
           </View>
         </View>
         <View style={styles.fieldWrap}>
           <MaterialCommunityIcons name="water" size={20} color="#16a34a" style={styles.fieldIcon} />
           <View style={styles.fieldContent}>
             <Text style={styles.fieldLabel}>Blood Sugar</Text>
-            <TextInput value={bloodSugar} onChangeText={setBloodSugar} style={styles.input} placeholder="Blood Sugar (mg/dL)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} keyboardType="numeric" />
+            <TextInput value={bloodSugar} onChangeText={setBloodSugar} style={[styles.input, errors.bloodSugar && styles.inputError]} placeholder="Blood Sugar (mg/dL)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} keyboardType="numeric" />
+            {errors.bloodSugar ? <Text style={styles.errorText}>{errors.bloodSugar}</Text> : null}
           </View>
         </View>
         <View style={styles.fieldWrap}>
           <MaterialCommunityIcons name="thermometer" size={20} color="#f59e0b" style={styles.fieldIcon} />
           <View style={styles.fieldContent}>
             <Text style={styles.fieldLabel}>Temperature</Text>
-            <TextInput value={temperature} onChangeText={setTemperature} style={styles.input} placeholder="Temperature (F)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} keyboardType="decimal-pad" />
+            <TextInput value={temperature} onChangeText={setTemperature} style={[styles.input, errors.temperature && styles.inputError]} placeholder="Temperature (F)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} keyboardType="decimal-pad" />
+            {errors.temperature ? <Text style={styles.errorText}>{errors.temperature}</Text> : null}
           </View>
         </View>
         <View style={[styles.fieldWrap, styles.textareaWrap]}>
@@ -304,6 +455,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 10,
     elevation: 3,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   statValue: {
     marginTop: 6,
@@ -316,6 +471,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748b',
     marginTop: 1,
+  },
+  trendArrow: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   mainCard: {
     backgroundColor: '#ffffff',
@@ -384,6 +543,16 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     fontSize: 15,
     ...WEB_INPUT_RESET_STYLE,
+  },
+  inputError: {
+    borderColor: '#dc2626',
+    backgroundColor: '#fef2f2',
+  },
+  errorText: {
+    color: '#dc2626',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
   textareaWrap: {
     alignItems: 'flex-start',

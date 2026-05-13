@@ -25,6 +25,12 @@ function MetricPill({ label, value, field }) {
     if (metricField === 'hemoglobin' || metricField === 'rbc') {
       return n.toFixed(2).replace(/\.00$/, '')
     }
+    if (metricField === 'mcv' || metricField === 'mch' || metricField === 'mchc' || metricField === 'esr') {
+      return n.toFixed(2).replace(/\.00$/, '')
+    }
+    if (metricField === 'neutrophils' || metricField === 'lymphocytes') {
+      return n.toFixed(1).replace(/\.0$/, '')
+    }
     return n.toLocaleString('en-IN')
   }
 
@@ -37,11 +43,17 @@ function MetricPill({ label, value, field }) {
 }
 
 function getSummaryPreview(summary) {
+  const stripHealthScoreText = (text) =>
+    String(text || '')
+      .replace(/\.?\s*health\s*score\s*:\s*\d+(?:\.\d+)?\s*\/\s*100\.?/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim()
+
   if (!summary) return ''
 
   if (typeof summary === 'object') {
     const title = String(summary?.mainInsight?.title || '').trim()
-    const message = String(summary?.mainInsight?.message || '').trim()
+    const message = stripHealthScoreText(String(summary?.mainInsight?.message || '').trim())
     return [title, message].filter(Boolean).join(': ')
   }
 
@@ -51,11 +63,11 @@ function getSummaryPreview(summary) {
   try {
     const parsed = JSON.parse(raw)
     const title = String(parsed?.mainInsight?.title || '').trim()
-    const message = String(parsed?.mainInsight?.message || '').trim()
+    const message = stripHealthScoreText(String(parsed?.mainInsight?.message || '').trim())
     const combined = [title, message].filter(Boolean).join(': ')
-    return combined || raw
+    return combined || stripHealthScoreText(raw)
   } catch (_error) {
-    return raw
+    return stripHealthScoreText(raw)
   }
 }
 
@@ -72,7 +84,7 @@ export default function AnalysisHistoryScreen({ navigation }) {
     try {
       const { data, error } = await supabase
         .from('report_analysis')
-        .select('id, report_id, hemoglobin, rbc, wbc, platelets, health_score, ai_summary, analyzed_at, reports!inner(file_name, user_id)')
+        .select('id, report_id, hemoglobin, rbc, wbc, platelets, mcv, mch, mchc, neutrophils, lymphocytes, esr, ai_summary, analyzed_at, reports!inner(file_name, user_id)')
         .eq('reports.user_id', user.id)
         .order('analyzed_at', { ascending: false })
 
@@ -118,11 +130,13 @@ export default function AnalysisHistoryScreen({ navigation }) {
                   <MetricPill label="RBC" value={item.rbc} field="rbc" />
                   <MetricPill label="WBC" value={item.wbc} field="wbc" />
                   <MetricPill label="PLT" value={item.platelets} field="platelets" />
+                  <MetricPill label="MCV" value={item.mcv} field="mcv" />
+                  <MetricPill label="MCH" value={item.mch} field="mch" />
+                  <MetricPill label="MCHC" value={item.mchc} field="mchc" />
+                  <MetricPill label="NEU" value={item.neutrophils} field="neutrophils" />
+                  <MetricPill label="LYM" value={item.lymphocytes} field="lymphocytes" />
+                  <MetricPill label="ESR" value={item.esr} field="esr" />
                 </View>
-
-                {item.health_score !== null && item.health_score !== undefined ? (
-                  <Text style={styles.score}>Health Score: {item.health_score}/100</Text>
-                ) : null}
 
                 {item.ai_summary ? (
                   <Subtle style={styles.summary} numberOfLines={3}>
@@ -185,11 +199,6 @@ const styles = StyleSheet.create({
   pillValue: {
     fontWeight: '800',
     fontSize: 12,
-  },
-  score: {
-    marginTop: 8,
-    color: '#0f172a',
-    fontWeight: '800',
   },
   summary: {
     marginTop: 6,

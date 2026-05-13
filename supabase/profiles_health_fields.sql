@@ -46,6 +46,7 @@ ON CONFLICT (id) DO NOTHING;
 
 DROP POLICY IF EXISTS "Users can upload own avatar" ON storage.objects;
 DROP POLICY IF EXISTS "Users can view own avatar" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update own avatar" ON storage.objects;
 DROP POLICY IF EXISTS "Users can delete own avatar" ON storage.objects;
 
 -- Users upload only files whose base filename matches their auth uid, e.g. <uid>.jpg.
@@ -53,6 +54,19 @@ CREATE POLICY "Users can upload own avatar"
   ON storage.objects
   FOR INSERT
   TO authenticated
+  WITH CHECK (
+    bucket_id = 'avatars'
+    AND split_part(name, '.', 1) = auth.uid()::text
+  );
+
+CREATE POLICY "Users can update own avatar"
+  ON storage.objects
+  FOR UPDATE
+  TO authenticated
+  USING (
+    bucket_id = 'avatars'
+    AND split_part(name, '.', 1) = auth.uid()::text
+  )
   WITH CHECK (
     bucket_id = 'avatars'
     AND split_part(name, '.', 1) = auth.uid()::text

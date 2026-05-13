@@ -14,12 +14,17 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
+import * as Linking from 'expo-linking'
+import * as WebBrowser from 'expo-web-browser'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import {
   isInvalidRefreshTokenError,
+  finalizeOAuthRedirect,
   runAuthRequestWithRecovery,
   supabase,
 } from '../lib/supabaseClient'
+
+WebBrowser.maybeCompleteAuthSession()
 
 const APP_LOGO = require('../../assets/app-logo.png')
 const FONT_FAMILY = Platform.select({
@@ -60,6 +65,7 @@ export default function LoginScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false)
   const [focusedField, setFocusedField] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [resettingPassword, setResettingPassword] = useState(false)
   const [errors, setErrors] = useState({})
 
@@ -154,6 +160,39 @@ export default function LoginScreen({ navigation }) {
     }
   }
 
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true)
+    try {
+      const redirectTo = Linking.createURL('auth/callback')
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      })
+
+      if (error) {
+        throw error
+      }
+
+      if (!data?.url) {
+        throw new Error('Could not start Google sign in. Please try again.')
+      }
+
+      const authResult = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
+      if (authResult.type !== 'success' || !authResult.url) {
+        return
+      }
+
+      await finalizeOAuthRedirect(authResult.url)
+    } catch (error) {
+      Alert.alert('Google Sign-In Failed', error?.message || 'Please try again.')
+    } finally {
+      setGoogleLoading(false)
+    }
+  }
+
   const isFormValid = email.trim() && password && Object.keys(errors).length === 0
 
   return (
@@ -206,7 +245,7 @@ export default function LoginScreen({ navigation }) {
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    editable={!loading}
+                    editable={!loading && !googleLoading}
                     value={email}
                     onFocus={() => setFocusedField('email')}
                     onBlur={() => setFocusedField('')}
@@ -240,7 +279,7 @@ export default function LoginScreen({ navigation }) {
                     placeholder="Enter your password"
                     placeholderTextColor="#7A8794"
                     secureTextEntry={!showPassword}
-                    editable={!loading}
+                    editable={!loading && !googleLoading}
                     value={password}
                     onFocus={() => setFocusedField('password')}
                     onBlur={() => setFocusedField('')}
@@ -254,7 +293,7 @@ export default function LoginScreen({ navigation }) {
                   <TouchableOpacity
                     style={styles.eyeButton}
                     onPress={() => setShowPassword(!showPassword)}
-                    disabled={loading}
+                    disabled={loading || googleLoading}
                   >
                     <MaterialCommunityIcons
                       name={showPassword ? 'eye-off-outline' : 'eye-outline'}
@@ -269,7 +308,7 @@ export default function LoginScreen({ navigation }) {
               <TouchableOpacity
                 style={styles.forgotPasswordWrap}
                 onPress={handleForgotPassword}
-                disabled={loading || resettingPassword}
+                disabled={loading || googleLoading || resettingPassword}
                 activeOpacity={0.75}
               >
                 <Text style={styles.forgotPassword}>
@@ -280,10 +319,10 @@ export default function LoginScreen({ navigation }) {
               <TouchableOpacity
                 style={[
                   styles.signInButton,
-                  (!isFormValid || loading) && styles.signInButtonDisabled,
+                  (!isFormValid || loading || googleLoading) && styles.signInButtonDisabled,
                 ]}
                 onPress={handleLogin}
-                disabled={!isFormValid || loading}
+                disabled={!isFormValid || loading || googleLoading}
                 activeOpacity={0.88}
               >
                 {loading ? (
@@ -293,11 +332,33 @@ export default function LoginScreen({ navigation }) {
                 )}
               </TouchableOpacity>
 
+              <View style={styles.oauthSeparator}>
+                <View style={styles.oauthSeparatorLine} />
+                <Text style={styles.oauthSeparatorText}>OR</Text>
+                <View style={styles.oauthSeparatorLine} />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.googleButton, googleLoading && styles.googleButtonDisabled]}
+                onPress={handleGoogleSignIn}
+                disabled={loading || googleLoading}
+                activeOpacity={0.88}
+              >
+                {googleLoading ? (
+                  <ActivityIndicator size="small" color="#111827" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="google" size={20} color="#ea4335" />
+                    <Text style={styles.googleButtonText}>Continue with Google</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
               <View style={styles.signUpRow}>
                 <Text style={styles.signUpText}>Don't have an account? </Text>
                 <TouchableOpacity
                   onPress={() => navigation.navigate('Signup')}
-                  disabled={loading}
+                  disabled={loading || googleLoading}
                 >
                   <Text style={styles.signUpLink}>Create one</Text>
                 </TouchableOpacity>
@@ -453,6 +514,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 34,
+  },
+  oauthSeparator: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  oauthSeparatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.28)',
+  },
+  oauthSeparatorText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '700',
+    marginHorizontal: 12,
+  },
+  googleButton: {
+    width: '100%',
+    minHeight: 54,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe4ef',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 34,
+    elevation: 3,
+  },
+  googleButtonDisabled: {
+    opacity: 0.75,
+  },
+  googleButtonText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
   },
   signUpText: {
     fontFamily: FONT_FAMILY,
