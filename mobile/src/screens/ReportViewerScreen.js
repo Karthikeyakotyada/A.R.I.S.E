@@ -15,6 +15,7 @@ import PageHeader from '../components/PageHeader'
 import AnimatedListItem from '../components/AnimatedListItem'
 import InlineBanner from '../components/InlineBanner'
 import MedicalDisclaimer from '../components/MedicalDisclaimer'
+import { typography } from '../lib/typography'
 
 function hasDetectedValues(analysis) {
   if (!analysis) return false
@@ -488,19 +489,19 @@ export default function ReportViewerScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   fileName: {
     fontSize: 18,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#0f172a',
   },
   section: {
     fontSize: 16,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#0f172a',
     marginBottom: 6,
   },
   subSection: {
     fontSize: 13,
     color: '#475569',
-    fontWeight: '800',
+    ...typography.style.extraBold,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
     marginTop: 8,
@@ -524,7 +525,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   badgeText: {
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -555,15 +556,15 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     color: '#475569',
-    fontWeight: '700',
+    ...typography.style.bold,
     fontSize: 12,
   },
   metricValue: {
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 16,
   },
   score: {
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#0f172a',
     marginTop: 8,
   },
@@ -586,7 +587,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   summaryTitle: {
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#0f172a',
     fontSize: 14,
     flex: 1,
@@ -598,7 +599,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   severityText: {
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 10,
     letterSpacing: 0.3,
   },
@@ -622,7 +623,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
   },
   suggestionTitle: {
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#0f172a',
     fontSize: 13,
   },

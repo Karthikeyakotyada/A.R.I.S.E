@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabaseClient'
+import { typography } from '../lib/typography'
 
 export default function EditProfileScreen({ navigation }) {
   const { user } = useAuth()
@@ -192,7 +193,7 @@ export default function EditProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   title: {
     fontSize: 22,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#0f172a',
   },
   fieldWrap: {
@@ -206,11 +207,11 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#dc2626',
     fontSize: 12,
-    fontWeight: '600',
+    ...typography.style.semiBold,
   },
   label: {
     color: '#223240',
-    fontWeight: '700',
+    ...typography.style.bold,
     fontSize: 13,
   },
   input: {

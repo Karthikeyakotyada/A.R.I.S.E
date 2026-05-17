@@ -4,6 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabaseClient'
 import { theme } from '../lib/theme'
+import { typography } from '../lib/typography'
 
 export default function PageHeader({ eyebrow, title, subtitle, right, showTopBar = true }) {
   const navigation = useNavigation()
@@ -153,13 +154,13 @@ const styles = StyleSheet.create({
   brandName: {
     color: '#0f172a',
     fontSize: 15,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     letterSpacing: 0.2,
   },
   brandSubtitle: {
     color: '#64748b',
     fontSize: 12,
-    fontWeight: '600',
+    ...typography.style.semiBold,
   },
   avatarWrap: {
     width: 42,
@@ -182,7 +183,7 @@ const styles = StyleSheet.create({
   avatarText: {
     color: '#0f766e',
     fontSize: 14,
-    fontWeight: '800',
+    ...typography.style.extraBold,
   },
   left: {
     flex: 1,
@@ -191,13 +192,13 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: theme.colors.primary,
     fontSize: 11,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     textTransform: 'uppercase',
     letterSpacing: 0.7,
   },
   title: {
     fontSize: 28,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: theme.colors.text,
   },
   subtitle: {

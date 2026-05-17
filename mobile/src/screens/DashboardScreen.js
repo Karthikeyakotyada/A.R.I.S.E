@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   StyleSheet,
@@ -22,6 +22,9 @@ import { formatDate } from '../lib/helpers'
 import PageHeader from '../components/PageHeader'
 import StatCard from '../components/StatCard'
 import AnimatedListItem from '../components/AnimatedListItem'
+import { LinearGradient } from 'expo-linear-gradient'
+import { typography } from '../lib/typography'
+import { formatHeroDateLine, formatHeroGreeting, resolveDisplayName } from '../lib/greeting'
 
 const { width } = Dimensions.get('window')
 const PREMIUM_CARD_SHADOW =
@@ -53,11 +56,17 @@ export default function DashboardScreen({ navigation }) {
   const [recentLogs, setRecentLogs] = useState([])
   const [refreshing, setRefreshing] = useState(false)
   const [profileAvatarUrl, setProfileAvatarUrl] = useState(null)
+  const [profileName, setProfileName] = useState(null)
   const [avatarLoaded, setAvatarLoaded] = useState(false)
   const [selectedMetric, setSelectedMetric] = useState(null)
   const insightAnim = useRef(new Animated.Value(0)).current
 
-  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || 'User'
+  const displayName = useMemo(
+    () => resolveDisplayName({ user, profile: profileName ? { name: profileName } : null }),
+    [user, profileName]
+  )
+  const heroGreeting = useMemo(() => formatHeroGreeting(displayName), [displayName])
+  const heroDateLine = useMemo(() => formatHeroDateLine(), [])
 
   const loadDashboard = useCallback(async () => {
     if (!user) return
@@ -73,7 +82,7 @@ export default function DashboardScreen({ navigation }) {
           .limit(MAX_RECENT_LOGS),
         supabase
           .from('profiles')
-          .select('avatar_url')
+          .select('avatar_url, name')
           .eq('id', user.id)
           .maybeSingle(),
       ])
@@ -81,6 +90,7 @@ export default function DashboardScreen({ navigation }) {
       setReportCount(reports?.length || 0)
       setRecentLogs((logs || []).slice(0, MAX_RECENT_LOGS))
       setProfileAvatarUrl(profile?.avatar_url || null)
+      setProfileName(profile?.name || null)
       setAvatarLoaded(true)
     } catch (error) {
       console.error('Error loading dashboard:', error)
@@ -540,13 +550,24 @@ export default function DashboardScreen({ navigation }) {
       >
         {/* Hero Section */}
         <View style={styles.heroCard}>
+          <LinearGradient
+            colors={['#119e8f', '#0f766e', '#0b5f57', '#094f48']}
+            locations={[0, 0.4, 0.75, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
           <View style={styles.heroGradientTop} />
           <View style={styles.heroGradientBottom} />
+          <View style={styles.heroSheen} />
           <View style={styles.heroGlowOne} />
           <View style={styles.heroGlowTwo} />
+          <View style={styles.heroGlowThree} />
           <View style={styles.headerContent}>
-            <Text style={styles.headerGreeting}>Health Dashboard</Text>
-            <Text style={styles.headerName}>Hi, {displayName}</Text>
+            <Text style={styles.headerDateLine}>{heroDateLine}</Text>
+            <Text style={styles.headerName} accessibilityRole="header">
+              {heroGreeting}
+            </Text>
             <Text style={styles.headerSubtitle}>
               Your latest health snapshot, trends, and activity in one place.
             </Text>
@@ -859,13 +880,13 @@ const styles = StyleSheet.create({
   },
   brandName: {
     fontSize: 15,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#0b1220',
     letterSpacing: 0.5,
   },
   brandSubtitle: {
     fontSize: 9,
-    fontWeight: '500',
+    ...typography.style.medium,
     color: '#7b8a9d',
   },
   avatarWrap: {
@@ -888,7 +909,7 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontSize: 13,
-    fontWeight: '900',
+    ...typography.style.bold,
     color: '#166534',
   },
   container: {
@@ -902,71 +923,98 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 10,
     borderRadius: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minHeight: 100,
     backgroundColor: '#0f766e',
     overflow: 'hidden',
     position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
     ...INTERACTIVE_CARD_SHADOW,
+    ...(Platform.OS === 'web'
+      ? { boxShadow: '0px 8px 24px rgba(11,95,87,0.28), 0px 2px 8px rgba(15,23,42,0.06)' }
+      : { elevation: 4 }),
   },
   heroGradientTop: {
     position: 'absolute',
     left: 0,
     right: 0,
     top: 0,
-    height: '62%',
-    backgroundColor: '#16a085',
-    opacity: 0.18,
+    height: '50%',
+    backgroundColor: 'rgba(255,255,255,0.07)',
   },
   heroGradientBottom: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '62%',
-    backgroundColor: '#0b5f57',
-    opacity: 0.24,
+    height: '45%',
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  heroSheen: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    left: -40,
+    top: -48,
   },
   heroGlowOne: {
     position: 'absolute',
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(255,255,255,0.11)',
-    right: -14,
-    top: -18,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    right: -18,
+    top: -22,
   },
   heroGlowTwo: {
     position: 'absolute',
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    right: 42,
-    bottom: -20,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(167,243,208,0.08)',
+    right: 32,
+    bottom: -18,
+  },
+  heroGlowThree: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    left: 20,
+    bottom: 10,
   },
   headerContent: {
     flex: 1,
+    zIndex: 2,
   },
-  headerGreeting: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#ccfbf1',
-    letterSpacing: 0.3,
-    marginBottom: 1,
-    textTransform: 'uppercase',
+  headerDateLine: {
+    ...typography.style.medium,
+    fontSize: 13,
+    color: 'rgba(204,251,241,0.95)',
+    letterSpacing: 0.2,
+    marginBottom: 6,
+    textTransform: 'capitalize',
   },
   headerName: {
-    fontSize: 26,
-    fontWeight: '900',
+    ...typography.style.hero,
+    fontSize: 24,
+    lineHeight: 30,
     color: '#ffffff',
-    marginBottom: 3,
+    marginBottom: 5,
+    letterSpacing: 0.15,
+    paddingTop: 1,
   },
   headerSubtitle: {
-    fontSize: 11,
-    color: '#d7f9f4',
-    fontWeight: '500',
-    lineHeight: 15,
+    ...typography.style.regular,
+    fontSize: 13,
+    color: 'rgba(231,249,244,0.9)',
+    lineHeight: 18,
+    maxWidth: width - 72,
   },
   summaryCardsRow: {
     marginTop: 2,
@@ -1002,20 +1050,20 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: 9,
-    fontWeight: '600',
+    ...typography.style.medium,
     color: '#708198',
   },
   summaryValue: {
     fontSize: 13,
     color: '#0b1220',
-    fontWeight: '900',
+    ...typography.style.extraBold,
   },
   metricsContainer: {
     marginBottom: 12,
   },
   metricsTitle: {
     fontSize: 19,
-    fontWeight: '800',
+    ...typography.style.bold,
     color: '#0b1220',
   },
   metricsHint: {
@@ -1023,7 +1071,7 @@ const styles = StyleSheet.create({
     color: '#7b8a9d',
     marginTop: 2,
     marginBottom: 10,
-    fontWeight: '600',
+    ...typography.style.medium,
   },
   metricsGrid: {
     display: 'none',
@@ -1084,7 +1132,7 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 9,
-    fontWeight: '600',
+    ...typography.style.medium,
     color: '#64748b',
   },
   metricStatusPill: {
@@ -1095,24 +1143,24 @@ const styles = StyleSheet.create({
   },
   metricStatusText: {
     fontSize: 9,
-    fontWeight: '700',
+    ...typography.style.bold,
   },
   metricValue: {
     fontSize: 28,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#1e5a4a',
     marginTop: 1,
     marginBottom: 1,
   },
   metricUnit: {
     fontSize: 10,
-    fontWeight: '600',
+    ...typography.style.medium,
     color: '#8fa0b5',
     marginBottom: 3,
   },
   metricQuickStatus: {
     fontSize: 9,
-    fontWeight: '600',
+    ...typography.style.medium,
     opacity: 0.9,
   },
   metricInsightCard: {
@@ -1127,12 +1175,12 @@ const styles = StyleSheet.create({
   },
   metricInsightTitle: {
     fontSize: 13,
-    fontWeight: '800',
+    ...typography.style.bold,
     color: '#0b1220',
   },
   metricInsightText: {
     fontSize: 11,
-    fontWeight: '500',
+    ...typography.style.regular,
     color: '#516174',
     lineHeight: 15,
   },
@@ -1141,7 +1189,7 @@ const styles = StyleSheet.create({
   },
   smartInsightsTitle: {
     fontSize: 19,
-    fontWeight: '800',
+    ...typography.style.bold,
     color: '#0b1220',
   },
   smartInsightsHint: {
@@ -1149,7 +1197,7 @@ const styles = StyleSheet.create({
     color: '#7b8a9d',
     marginTop: 2,
     marginBottom: 10,
-    fontWeight: '600',
+    ...typography.style.medium,
   },
   smartInsightsList: {
     gap: 8,
@@ -1182,12 +1230,12 @@ const styles = StyleSheet.create({
   },
   smartInsightLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    ...typography.style.semiBold,
   },
   smartInsightText: {
     fontSize: 12,
     color: '#334155',
-    fontWeight: '500',
+    ...typography.style.regular,
     lineHeight: 17,
   },
   statsSection: {
@@ -1218,13 +1266,13 @@ const styles = StyleSheet.create({
   },
   statCount: {
     fontSize: 20,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#0f172a',
     marginBottom: 2,
   },
   statLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    ...typography.style.medium,
     color: '#64748b',
   },
   statDivider: {
@@ -1243,12 +1291,12 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 19,
-    fontWeight: '800',
+    ...typography.style.bold,
     color: '#0b1220',
   },
   sectionBadge: {
     fontSize: 11,
-    fontWeight: '700',
+    ...typography.style.semiBold,
     color: '#ffffff',
     backgroundColor: '#1e5a4a',
     paddingHorizontal: 7,
@@ -1271,13 +1319,14 @@ const styles = StyleSheet.create({
   },
   emptyStateTitle: {
     fontSize: 17,
-    fontWeight: '800',
+    ...typography.style.bold,
     color: '#0b1220',
     marginBottom: 4,
   },
   emptyStateSubtitle: {
     fontSize: 12,
     color: '#708198',
+    ...typography.style.regular,
     textAlign: 'center',
     lineHeight: 18,
   },
@@ -1335,12 +1384,12 @@ const styles = StyleSheet.create({
   },
   logDate: {
     fontSize: 14,
-    fontWeight: '800',
+    ...typography.style.bold,
     color: '#0b1220',
   },
   logTime: {
     fontSize: 11,
-    fontWeight: '600',
+    ...typography.style.medium,
     color: '#7b8a9d',
     marginTop: 2,
   },
@@ -1354,7 +1403,7 @@ const styles = StyleSheet.create({
   },
   logStatusText: {
     fontSize: 10,
-    fontWeight: '700',
+    ...typography.style.semiBold,
     color: '#166534',
   },
   logMetricsGrid: {
@@ -1377,7 +1426,7 @@ const styles = StyleSheet.create({
   },
   logMetricLabel: {
     fontSize: 10,
-    fontWeight: '600',
+    ...typography.style.medium,
     color: '#7b8a9d',
     marginBottom: 4,
   },
@@ -1388,12 +1437,12 @@ const styles = StyleSheet.create({
   },
   logMetricValue: {
     fontSize: 15,
-    fontWeight: '800',
+    ...typography.style.bold,
     color: '#0b1220',
   },
   logMetricUnit: {
     fontSize: 10,
-    fontWeight: '600',
+    ...typography.style.medium,
     color: '#8fa0b5',
     marginBottom: 1,
   },

@@ -9,6 +9,7 @@ import { getStatusForValue } from '../lib/cbcAnalyzer'
 import { Card, EmptyState, Screen, Subtle } from '../components/ui'
 import PageHeader from '../components/PageHeader'
 import AnimatedListItem from '../components/AnimatedListItem'
+import { typography } from '../lib/typography'
 
 function statusColor(value, field) {
   const status = getStatusForValue(value, field)
@@ -172,7 +173,7 @@ export default function AnalysisHistoryScreen({ navigation }) {
 const styles = StyleSheet.create({
   fileName: {
     fontSize: 15,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#0f172a',
   },
   pillsRow: {
@@ -194,10 +195,10 @@ const styles = StyleSheet.create({
   pillLabel: {
     color: '#475569',
     fontSize: 11,
-    fontWeight: '700',
+    ...typography.style.bold,
   },
   pillValue: {
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 12,
   },
   summary: {
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
   cta: {
     marginTop: 8,
     color: '#0b6b63',
-    fontWeight: '700',
+    ...typography.style.bold,
     fontSize: 12,
   },
   centered: {

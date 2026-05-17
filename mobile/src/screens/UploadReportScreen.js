@@ -29,6 +29,7 @@ import { isDeviceOnline, toFriendlyError } from '../lib/network'
 import { Card, Heading, PrimaryButton, Screen, Subtle } from '../components/ui'
 import PageHeader from '../components/PageHeader'
 import InlineBanner from '../components/InlineBanner'
+import { typography } from '../lib/typography'
 
 const { width } = Dimensions.get('window')
 
@@ -669,21 +670,21 @@ const styles = StyleSheet.create({
   },
   headerEyebrow: {
     fontSize: 12,
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#64748b',
     letterSpacing: 0.3,
     marginBottom: 4,
   },
   headerTitle: {
     fontSize: 32,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#0f172a',
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 14,
     color: '#64748b',
-    fontWeight: '500',
+    ...typography.style.medium,
     lineHeight: 20,
   },
   offlineBanner: {
@@ -705,7 +706,7 @@ const styles = StyleSheet.create({
   },
   offlineTitle: {
     fontSize: 13,
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#7f1d1d',
     marginBottom: 2,
   },
@@ -740,7 +741,7 @@ const styles = StyleSheet.create({
   messageBannerText: {
     flex: 1,
     fontSize: 13,
-    fontWeight: '600',
+    ...typography.style.semiBold,
     color: '#1e293b',
   },
   uploadSection: {
@@ -818,7 +819,7 @@ const styles = StyleSheet.create({
   },
   uploadTitle: {
     fontSize: 18,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#0f172a',
     marginBottom: 5,
   },
@@ -833,7 +834,7 @@ const styles = StyleSheet.create({
   uploadSupportText: {
     fontSize: 11,
     color: '#94a3b8',
-    fontWeight: '600',
+    ...typography.style.semiBold,
   },
   filePreview: {
     flexDirection: 'row',
@@ -859,20 +860,20 @@ const styles = StyleSheet.create({
   },
   fileName: {
     fontSize: 14,
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#0f172a',
     marginBottom: 2,
   },
   fileDetails: {
     fontSize: 12,
     color: '#64748b',
-    fontWeight: '500',
+    ...typography.style.medium,
   },
   fileReplaceHint: {
     marginTop: 4,
     fontSize: 11,
     color: '#1e5a4a',
-    fontWeight: '600',
+    ...typography.style.semiBold,
   },
   fileCheck: {
     width: 32,
@@ -885,7 +886,7 @@ const styles = StyleSheet.create({
   checkIcon: {
     fontSize: 18,
     color: '#fff',
-    fontWeight: '800',
+    ...typography.style.extraBold,
   },
   progressSection: {
     backgroundColor: '#ffffff',
@@ -903,12 +904,12 @@ const styles = StyleSheet.create({
   },
   progressTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#0f172a',
   },
   progressPercent: {
     fontSize: 14,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#1e5a4a',
   },
   progressBar: {
@@ -942,7 +943,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#e2e8f0',
     color: '#94a3b8',
     fontSize: 14,
-    fontWeight: '700',
+    ...typography.style.bold,
     textAlign: 'center',
     lineHeight: 32,
     marginBottom: 6,
@@ -953,7 +954,7 @@ const styles = StyleSheet.create({
   },
   progressStepLabel: {
     fontSize: 11,
-    fontWeight: '600',
+    ...typography.style.semiBold,
     color: '#64748b',
     textAlign: 'center',
   },
@@ -993,7 +994,7 @@ const styles = StyleSheet.create({
   },
   uploadButtonText: {
     fontSize: 16,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#fff',
     letterSpacing: 0.3,
   },
@@ -1023,13 +1024,13 @@ const styles = StyleSheet.create({
   },
   infoCardTitle: {
     fontSize: 13,
-    fontWeight: '600',
+    ...typography.style.semiBold,
     color: '#334155',
   },
   infoCardText: {
     fontSize: 12,
     color: '#6b7280',
-    fontWeight: '400',
+    ...typography.style.regular,
     lineHeight: 16,
   },
   footer: {
@@ -1039,6 +1040,6 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     color: '#94a3b8',
-    fontWeight: '500',
+    ...typography.style.medium,
   },
 })

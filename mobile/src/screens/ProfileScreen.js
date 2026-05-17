@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
 import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabaseClient'
+import { typography } from '../lib/typography'
 
 const AVATAR_BUCKET = 'avatars'
 
@@ -576,7 +577,7 @@ const styles = StyleSheet.create({
   avatarText: {
     color: '#fff',
     fontSize: 24,
-    fontWeight: '800',
+    ...typography.style.extraBold,
   },
   cameraBadge: {
     position: 'absolute',
@@ -597,13 +598,13 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 20,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#0f172a',
   },
   email: {
     fontSize: 14,
     color: '#475569',
-    fontWeight: '500',
+    ...typography.style.medium,
   },
   joined: {
     marginTop: 2,
@@ -633,12 +634,12 @@ const styles = StyleSheet.create({
   },
   editButtonText: {
     color: '#ffffff',
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 15,
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#0f172a',
   },
   statsGrid: {
@@ -666,7 +667,7 @@ const styles = StyleSheet.create({
   inlineErrorText: {
     color: '#dc2626',
     fontSize: 12,
-    fontWeight: '600',
+    ...typography.style.semiBold,
   },
   healthInfoCard: {
     borderRadius: 18,
@@ -692,13 +693,13 @@ const styles = StyleSheet.create({
   },
   healthInfoLabel: {
     fontSize: 14,
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#475569',
   },
   healthInfoValue: {
     flexShrink: 1,
     fontSize: 14,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#0f172a',
     textAlign: 'right',
   },
@@ -731,12 +732,12 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 14,
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#334155',
   },
   infoValue: {
     fontSize: 14,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#0f172a',
   },
   statusPill: {
@@ -747,7 +748,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingVertical: 4,
     paddingHorizontal: 10,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 12,
   },
   signOutButton: {
@@ -772,7 +773,7 @@ const styles = StyleSheet.create({
   },
   signOutText: {
     color: '#dc2626',
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 15,
   },
   sheetBackdropHost: {
@@ -808,7 +809,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     color: '#e5e7eb',
     fontSize: 20,
-    fontWeight: '400',
+    ...typography.style.regular,
     textAlign: 'center',
   },
   sheetAvatarWrap: {
@@ -833,7 +834,7 @@ const styles = StyleSheet.create({
   sheetAvatarFallback: {
     color: '#ffffff',
     fontSize: 54,
-    fontWeight: '800',
+    ...typography.style.extraBold,
   },
   sheetAvatarBadge: {
     position: 'absolute',
@@ -862,7 +863,7 @@ const styles = StyleSheet.create({
   sourceButtonText: {
     color: '#e5e7eb',
     fontSize: 16,
-    fontWeight: '600',
+    ...typography.style.semiBold,
   },
   sheetActionPressed: {
     opacity: 0.85,
@@ -908,7 +909,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: '#f3f4f6',
     fontSize: 20,
-    fontWeight: '400',
+    ...typography.style.regular,
     marginHorizontal: 8,
   },
   cropPreviewArea: {
@@ -943,7 +944,7 @@ const styles = StyleSheet.create({
   cropFallback: {
     color: '#ffffff',
     fontSize: 54,
-    fontWeight: '800',
+    ...typography.style.extraBold,
   },
   cropRotateWrap: {
     alignItems: 'center',
@@ -962,7 +963,7 @@ const styles = StyleSheet.create({
   rotateButtonText: {
     color: '#e5e7eb',
     fontSize: 14,
-    fontWeight: '500',
+    ...typography.style.medium,
   },
   nextButton: {
     minHeight: 54,
@@ -974,6 +975,6 @@ const styles = StyleSheet.create({
   nextButtonText: {
     color: '#1e3a8a',
     fontSize: 17,
-    fontWeight: '500',
+    ...typography.style.medium,
   },
 })

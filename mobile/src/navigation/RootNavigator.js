@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { Ionicons } from '@expo/vector-icons'
 import { useAuth } from '../context/AuthContext'
 import { theme } from '../lib/theme'
+import { typography } from '../lib/typography'
 import LoginScreen from '../screens/LoginScreen'
 import SignupScreen from '../screens/SignupScreen'
 import DashboardScreen from '../screens/DashboardScreen'
@@ -30,7 +31,7 @@ function AppTabs() {
         headerShown: false,
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: '#64748b',
-        tabBarLabelStyle: { fontSize: 12, fontWeight: '700' },
+        tabBarLabelStyle: { ...typography.style.bold, fontSize: 12 },
         tabBarStyle: {
           height: 64,
           paddingTop: 6,
@@ -76,7 +77,7 @@ function AuthStack() {
       screenOptions={{
         headerStyle: { backgroundColor: '#ffffff' },
         headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '800', color: '#0f172a' },
+        headerTitleStyle: { ...typography.style.extraBold, color: '#0f172a' },
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
@@ -89,7 +90,7 @@ function LoadingSplash() {
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.bg }}>
       <ActivityIndicator size="large" color={theme.colors.primary} />
-      <Text style={{ marginTop: 10, color: '#64748b', fontWeight: '600' }}>Loading ARISE...</Text>
+      <Text style={{ marginTop: 10, color: '#64748b', ...typography.style.semiBold }}>Loading ARISE...</Text>
     </View>
   )
 }
@@ -117,7 +118,7 @@ export default function RootNavigator() {
       screenOptions={{
         headerStyle: { backgroundColor: '#ffffff' },
         headerShadowVisible: false,
-        headerTitleStyle: { fontWeight: '800', color: '#0f172a' },
+        headerTitleStyle: { ...typography.style.extraBold, color: '#0f172a' },
       }}
     >
       <Stack.Screen name="Home" component={AppTabs} options={{ headerShown: false }} />

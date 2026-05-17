@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native'
+import { typography } from '../lib/typography'
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web'
 
@@ -47,7 +48,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 13,
-    fontWeight: '700',
+    ...typography.style.bold,
   },
   info: {
     backgroundColor: '#eff6ff',

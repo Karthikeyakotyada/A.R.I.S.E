@@ -12,6 +12,7 @@ import { formatDate } from '../lib/helpers'
 import AnimatedListItem from '../components/AnimatedListItem'
 import InlineBanner from '../components/InlineBanner'
 import PageHeader from '../components/PageHeader'
+import { typography } from '../lib/typography'
 
 const WEB_INPUT_RESET_STYLE = Platform.OS === 'web'
   ? { outlineStyle: 'none' }
@@ -419,20 +420,20 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     fontSize: 24,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#14532d',
   },
   heroSubtitle: {
     marginTop: 2,
     fontSize: 13,
-    fontWeight: '600',
+    ...typography.style.semiBold,
     color: '#2f6650',
   },
   quickStatsSection: {
     marginBottom: 16,
   },
   sectionTitle: {
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 16,
     color: '#0f172a',
     marginBottom: 10,
@@ -463,18 +464,18 @@ const styles = StyleSheet.create({
   statValue: {
     marginTop: 6,
     fontSize: 17,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#0f172a',
   },
   statLabel: {
     fontSize: 11,
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#64748b',
     marginTop: 1,
   },
   trendArrow: {
     fontSize: 14,
-    fontWeight: '700',
+    ...typography.style.bold,
   },
   mainCard: {
     backgroundColor: '#ffffff',
@@ -494,7 +495,7 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   mainTitle: {
-    fontWeight: '900',
+    ...typography.style.extraBold,
     fontSize: 20,
     color: '#0f172a',
   },
@@ -503,7 +504,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   historyTitle: {
-    fontWeight: '900',
+    ...typography.style.extraBold,
     fontSize: 19,
     color: '#0f172a',
   },
@@ -528,7 +529,7 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 12,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#334155',
     marginBottom: 1,
   },
@@ -551,7 +552,7 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#dc2626',
     fontSize: 12,
-    fontWeight: '600',
+    ...typography.style.semiBold,
     marginTop: 4,
   },
   textareaWrap: {
@@ -581,7 +582,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   saveButtonText: {
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#ffffff',
     fontSize: 16,
   },
@@ -595,7 +596,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   rowTitle: {
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#1e293b',
   },
   vitalsLine: {

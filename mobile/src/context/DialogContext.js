@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { Animated, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { typography } from '../lib/typography'
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web'
 
@@ -155,8 +156,8 @@ const styles = StyleSheet.create({
   success: { borderColor: '#86efac' },
   error: { borderColor: '#fca5a5' },
   title: {
+    ...typography.style.extraBold,
     fontSize: 18,
-    fontWeight: '800',
     color: '#0f172a',
   },
   message: {
@@ -178,8 +179,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryText: {
+    ...typography.style.bold,
     color: '#334155',
-    fontWeight: '700',
   },
   primaryBtn: {
     flex: 1,
@@ -190,7 +191,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryText: {
+    ...typography.style.bold,
     color: '#fff',
-    fontWeight: '700',
   },
 })

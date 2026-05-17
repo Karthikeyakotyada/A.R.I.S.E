@@ -23,15 +23,12 @@ import {
   runAuthRequestWithRecovery,
   supabase,
 } from '../lib/supabaseClient'
+import { typography } from '../lib/typography'
 
 WebBrowser.maybeCompleteAuthSession()
 
 const APP_LOGO = require('../../assets/app-logo.png')
-const FONT_FAMILY = Platform.select({
-  ios: 'System',
-  android: 'Roboto',
-  default: 'sans-serif',
-})
+const FONT_FAMILY = typography.system
 
 const INPUT_WRAPPER_SHADOW_STYLE =
   Platform.OS === 'web'
@@ -398,18 +395,16 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   appName: {
-    fontFamily: FONT_FAMILY,
+    ...typography.style.extraBold,
     fontSize: 34,
-    fontWeight: '800',
     letterSpacing: 1.2,
     color: '#FFFFFF',
     marginBottom: 6,
   },
   tagline: {
-    fontFamily: FONT_FAMILY,
     fontSize: 13,
+    ...typography.style.regular,
     color: 'rgba(255,255,255,0.78)',
-    fontWeight: '500',
   },
   formSection: {
     width: '100%',
@@ -417,17 +412,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   formTitle: {
-    fontFamily: FONT_FAMILY,
+    ...typography.style.extraBold,
     fontSize: 34,
-    fontWeight: '800',
     color: '#FFFFFF',
     marginBottom: 8,
   },
   formSubtitle: {
-    fontFamily: FONT_FAMILY,
     fontSize: 14,
+    ...typography.style.regular,
     color: 'rgba(255,255,255,0.74)',
-    fontWeight: '500',
     marginBottom: 24,
   },
   inputGroup: {
@@ -458,9 +451,8 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     color: '#111827',
-    fontFamily: FONT_FAMILY,
+    ...typography.style.regular,
     fontSize: 16,
-    fontWeight: '400',
     paddingVertical: 17,
   },
   passwordInput: {
@@ -470,10 +462,9 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   errorMessage: {
-    fontFamily: FONT_FAMILY,
     fontSize: 12,
+    ...typography.style.medium,
     color: '#FFE4E6',
-    fontWeight: '600',
     marginTop: 6,
     marginLeft: 2,
   },
@@ -482,10 +473,9 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   forgotPassword: {
-    fontFamily: FONT_FAMILY,
     fontSize: 13,
+    ...typography.style.medium,
     color: '#E4FFE8',
-    fontWeight: '600',
   },
   signInButton: {
     width: '100%',
@@ -504,9 +494,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   signInButtonText: {
-    fontFamily: FONT_FAMILY,
     fontSize: 16,
-    fontWeight: 'bold',
+    ...typography.style.semiBold,
     color: '#FFFFFF',
   },
   signUpRow: {
@@ -527,10 +516,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.28)',
   },
   oauthSeparatorText: {
-    fontFamily: FONT_FAMILY,
     fontSize: 12,
+    ...typography.style.semiBold,
     color: 'rgba(255,255,255,0.7)',
-    fontWeight: '700',
     marginHorizontal: 12,
   },
   googleButton: {
@@ -551,28 +539,24 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   googleButtonText: {
-    fontFamily: FONT_FAMILY,
     fontSize: 15,
-    fontWeight: '800',
+    ...typography.style.bold,
     color: '#111827',
   },
   signUpText: {
-    fontFamily: FONT_FAMILY,
     fontSize: 14,
+    ...typography.style.regular,
     color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
   },
   signUpLink: {
-    fontFamily: FONT_FAMILY,
     fontSize: 14,
+    ...typography.style.bold,
     color: '#FFFFFF',
-    fontWeight: '700',
   },
   footerText: {
-    fontFamily: FONT_FAMILY,
     fontSize: 11,
+    ...typography.style.regular,
     color: 'rgba(255,255,255,0.52)',
-    fontWeight: '400',
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 10,

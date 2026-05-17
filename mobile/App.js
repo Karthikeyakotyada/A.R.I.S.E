@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { StatusBar } from 'expo-status-bar'
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native'
-import { LogBox } from 'react-native'
+import { LogBox, Platform, Text, TextInput } from 'react-native'
+import * as SplashScreen from 'expo-splash-screen'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthProvider } from './src/context/AuthContext'
 import { DialogProvider } from './src/context/DialogContext'
@@ -8,13 +10,24 @@ import { ToastProvider } from './src/context/ToastContext'
 import RootNavigator from './src/navigation/RootNavigator'
 import AppErrorBoundary from './src/components/AppErrorBoundary'
 import { theme } from './src/lib/theme'
+import { typography } from './src/lib/typography'
 import { logEnvDiagnostics } from './src/lib/env'
 
 logEnvDiagnostics()
+SplashScreen.preventAutoHideAsync().catch(() => {})
+
+Text.defaultProps = {
+  ...(Text.defaultProps || {}),
+  style: [typography.style.regular, Text.defaultProps?.style],
+}
+
+TextInput.defaultProps = {
+  ...(TextInput.defaultProps || {}),
+  style: [typography.style.regular, TextInput.defaultProps?.style],
+}
 
 const defaultGlobalErrorHandler = global.ErrorUtils?.getGlobalHandler?.()
 
-// Non-fatal in dev: stale cached session can emit this once before cleanup/retry.
 LogBox.ignoreLogs([
   'AuthApiError: Invalid Refresh Token: Refresh Token Not Found',
 ])
@@ -41,6 +54,10 @@ const navTheme = {
 }
 
 export default function App() {
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {})
+  }, [])
+
   return (
     <AppErrorBoundary>
       <SafeAreaProvider>

@@ -13,6 +13,7 @@ import { Card, EmptyState, Screen, Subtle } from '../components/ui'
 import PageHeader from '../components/PageHeader'
 import AnimatedListItem from '../components/AnimatedListItem'
 import InlineBanner from '../components/InlineBanner'
+import { typography } from '../lib/typography'
 
 function StatusBadge({ status }) {
   const meta = REPORT_STATUS_META[status] || REPORT_STATUS_META.uploaded
@@ -243,7 +244,7 @@ export default function ReportsScreen({ navigation }) {
 const styles = StyleSheet.create({
   fileName: {
     fontSize: 15,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#0f172a',
   },
   itemCard: {
@@ -268,7 +269,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   badgeText: {
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -283,7 +284,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewBtnText: {
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#334155',
   },
   retryBtn: {
@@ -295,7 +296,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   retryBtnText: {
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#fff',
   },
   deleteBtn: {
@@ -307,7 +308,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   deleteBtnText: {
-    fontWeight: '700',
+    ...typography.style.bold,
     color: '#fff',
   },
   historyBtn: {
@@ -322,7 +323,7 @@ const styles = StyleSheet.create({
   },
   historyBtnText: {
     color: '#0f766e',
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 13,
   },
 })

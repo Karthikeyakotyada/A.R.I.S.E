@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Platform, Text, View } from 'react-native'
 import { useAuth } from '../context/AuthContext'
 import { finalizeOAuthRedirect } from '../lib/supabaseClient'
+import { typography } from '../lib/typography'
 
 export default function AuthCallbackScreen() {
   const { user } = useAuth()
@@ -53,7 +54,7 @@ export default function AuthCallbackScreen() {
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc' }}>
       <ActivityIndicator size="large" color="#0f9d58" />
-      <Text style={{ marginTop: 12, color: '#334155', fontWeight: '600' }}>{message}</Text>
+      <Text style={{ marginTop: 12, color: '#334155', ...typography.style.semiBold }}>{message}</Text>
     </View>
   )
 }

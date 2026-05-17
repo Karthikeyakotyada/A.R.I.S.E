@@ -18,15 +18,12 @@ import * as WebBrowser from 'expo-web-browser'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { useDialog } from '../context/DialogContext'
 import { finalizeOAuthRedirect, supabase } from '../lib/supabaseClient'
+import { typography } from '../lib/typography'
 
 WebBrowser.maybeCompleteAuthSession()
 
 const APP_LOGO = require('../../assets/app-logo.png')
-const FONT_FAMILY = Platform.select({
-  ios: 'System',
-  android: 'Roboto',
-  default: 'sans-serif',
-})
+const FONT_FAMILY = typography.system
 
 export default function SignupScreen({ navigation }) {
   const { showMessage } = useDialog()
@@ -375,18 +372,16 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   appName: {
-    fontFamily: FONT_FAMILY,
     fontSize: 34,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     letterSpacing: 1.2,
     color: '#FFFFFF',
     marginBottom: 6,
   },
   tagline: {
-    fontFamily: FONT_FAMILY,
     fontSize: 13,
+    ...typography.style.regular,
     color: 'rgba(255,255,255,0.78)',
-    fontWeight: '500',
   },
   formSection: {
     width: '100%',
@@ -394,17 +389,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   formTitle: {
-    fontFamily: FONT_FAMILY,
     fontSize: 34,
-    fontWeight: '800',
+    ...typography.style.extraBold,
     color: '#FFFFFF',
     marginBottom: 8,
   },
   formSubtitle: {
-    fontFamily: FONT_FAMILY,
     fontSize: 14,
+    ...typography.style.regular,
     color: 'rgba(255,255,255,0.74)',
-    fontWeight: '500',
     marginBottom: 24,
   },
   inputGroup: {
@@ -434,9 +427,8 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     color: '#111827',
-    fontFamily: FONT_FAMILY,
+    ...typography.style.regular,
     fontSize: 16,
-    fontWeight: '400',
     paddingVertical: 17,
   },
   passwordInput: {
@@ -466,9 +458,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   primaryButtonText: {
-    fontFamily: FONT_FAMILY,
     fontSize: 16,
-    fontWeight: '800',
+    ...typography.style.semiBold,
     color: '#FFFFFF',
   },
   footerRow: {
@@ -489,10 +480,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.28)',
   },
   oauthSeparatorText: {
-    fontFamily: FONT_FAMILY,
     fontSize: 12,
+    ...typography.style.semiBold,
     color: 'rgba(255,255,255,0.7)',
-    fontWeight: '700',
     marginHorizontal: 12,
   },
   googleButton: {
@@ -513,28 +503,24 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   googleButtonText: {
-    fontFamily: FONT_FAMILY,
     fontSize: 15,
-    fontWeight: '800',
+    ...typography.style.bold,
     color: '#111827',
   },
   footerRowText: {
-    fontFamily: FONT_FAMILY,
     fontSize: 14,
+    ...typography.style.regular,
     color: 'rgba(255,255,255,0.8)',
-    fontWeight: '500',
   },
   footerRowLink: {
-    fontFamily: FONT_FAMILY,
     fontSize: 14,
+    ...typography.style.bold,
     color: '#FFFFFF',
-    fontWeight: '700',
   },
   footerText: {
-    fontFamily: FONT_FAMILY,
     fontSize: 11,
+    ...typography.style.regular,
     color: 'rgba(255,255,255,0.52)',
-    fontWeight: '400',
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 14,

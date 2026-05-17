@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
+import { typography } from '../lib/typography'
 
 export default function MedicalDisclaimer() {
   return (
@@ -23,7 +24,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#92400e',
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 13,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
@@ -32,6 +33,6 @@ const styles = StyleSheet.create({
     color: '#78350f',
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '600',
+    ...typography.style.semiBold,
   },
 })

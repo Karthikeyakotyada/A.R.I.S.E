@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { Animated, Platform, StyleSheet, Text, View } from 'react-native'
+import { typography } from '../lib/typography'
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web'
 const TOAST_SHADOW_STYLE =
@@ -105,8 +106,8 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   text: {
+    ...typography.style.bold,
     color: '#fff',
-    fontWeight: '700',
     fontSize: 13,
   },
 })

@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { theme } from '../lib/theme'
+import { typography } from '../lib/typography'
 
 export default function StatCard({ value, label, tone = 'primary' }) {
   const colors = {
@@ -26,12 +27,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   value: {
+    ...typography.style.bold,
     fontSize: 30,
-    fontWeight: '900',
   },
   label: {
+    ...typography.style.semiBold,
     color: '#334155',
     fontSize: 13,
-    fontWeight: '700',
   },
 })

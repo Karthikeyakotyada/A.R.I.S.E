@@ -1,5 +1,6 @@
 import { Component } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { typography } from '../lib/typography'
 
 export default class AppErrorBoundary extends Component {
   constructor(props) {
@@ -55,7 +56,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontWeight: '900',
+    ...typography.style.extraBold,
     color: '#0f172a',
   },
   subtitle: {
@@ -82,7 +83,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#ffffff',
-    fontWeight: '800',
+    ...typography.style.extraBold,
     fontSize: 14,
   },
 })

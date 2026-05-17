@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { ActivityIndicator, Animated, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { theme } from '../lib/theme'
+import { typography } from '../lib/typography'
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web'
 const CARD_SHADOW_STYLE =
@@ -149,11 +150,12 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   heading: {
+    ...typography.style.bold,
     fontSize: 22,
     color: theme.colors.text,
-    fontWeight: '900',
   },
   subtle: {
+    ...typography.style.regular,
     color: theme.colors.muted,
     fontSize: 14,
     lineHeight: 20,
@@ -169,8 +171,8 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   primaryButtonText: {
+    ...typography.style.semiBold,
     color: '#ffffff',
-    fontWeight: '800',
     fontSize: 15,
   },
   ghostButton: {
@@ -185,7 +187,7 @@ const styles = StyleSheet.create({
   },
   ghostButtonText: {
     color: '#233746',
-    fontWeight: '700',
+    ...typography.style.bold,
     fontSize: 14,
   },
   inputWrap: {
@@ -193,7 +195,7 @@ const styles = StyleSheet.create({
   },
   label: {
     color: '#223240',
-    fontWeight: '700',
+    ...typography.style.bold,
     fontSize: 13,
   },
   input: {
@@ -228,7 +230,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: '#2b3f4d',
     fontSize: 14,
-    fontWeight: '700',
+    ...typography.style.bold,
   },
   emptySubtitle: {
     color: '#64748b',
