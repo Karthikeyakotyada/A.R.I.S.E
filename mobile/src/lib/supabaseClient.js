@@ -2,9 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createClient } from '@supabase/supabase-js'
 import { Platform } from 'react-native'
 import { isLikelyNetworkError } from './network'
+import { getSupabaseAnonKey, getSupabaseUrl } from './env'
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = getSupabaseUrl()
+const supabaseAnonKey = getSupabaseAnonKey()
 
 const projectRef = supabaseUrl?.replace(/^https?:\/\//, '').split('.')[0]
 const authStorageKey = projectRef

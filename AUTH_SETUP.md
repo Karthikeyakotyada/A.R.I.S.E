@@ -37,7 +37,7 @@ Add the following to `.env`:
 ```env
 # Web (Vite)
 VITE_SUPABASE_URL=https://fnneeunwmjuhzcagiclv.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_zw4j5k3_OxtmF16l3M_M3Q_vRD0-puA
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 VITE_GEMINI_API_KEY=your_api_key_here
 VITE_GEMINI_MODEL=google/gemini-2.0-flash-001
 ```

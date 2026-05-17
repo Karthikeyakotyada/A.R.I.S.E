@@ -2,6 +2,15 @@ import { EncodingType, readAsStringAsync } from 'expo-file-system/legacy'
 import { Platform } from 'react-native'
 import { decode } from 'base64-arraybuffer'
 import { supabase } from './supabaseClient'
+import {
+  getAiApiKey,
+  getGeminiModel,
+  getVisionApiKey,
+  getOpenRouterAttribution,
+  describeApiKeyForLogs,
+  describeAuthHeaderPreview,
+  sanitizeApiKey,
+} from './env'
 
 // ──────────────────────────────────────────────────────────────
 // BASE64 CONVERSION HELPERS
@@ -313,10 +322,11 @@ function keepOnlyTextSupportedValues(values, rawText) {
 
   return result
 }
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 const DEFAULT_GEMINI_MODEL_CANDIDATES = [
-  'google/gemini-2.0-flash-001',
-  'google/gemini-2.5-flash-lite',
-  'google/gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-8b',
 ]
 const DEFAULT_OPENROUTER_MODEL_CANDIDATES = [
   'google/gemini-2.0-flash-001',
@@ -324,14 +334,14 @@ const DEFAULT_OPENROUTER_MODEL_CANDIDATES = [
   'google/gemini-2.5-flash',
 ]
 const DEFAULT_AI_TIMEOUT_MS = 35000
-const AI_PIPELINE_VERSION = '2026-03-29-r2'
+const AI_PIPELINE_VERSION = '2026-05-16-r3'
 
 function isOpenRouterKey(apiKey) {
   return /^sk-or-v1-/i.test(String(apiKey || '').trim())
 }
 
 function getModelCandidates(apiKey) {
-  const configuredModel = String(process.env.EXPO_PUBLIC_GEMINI_MODEL || '').trim()
+  const configuredModel = getGeminiModel()
   const base = isOpenRouterKey(apiKey)
     ? DEFAULT_OPENROUTER_MODEL_CANDIDATES
     : DEFAULT_GEMINI_MODEL_CANDIDATES
@@ -437,12 +447,119 @@ function convertGeminiRequestToOpenRouterMessages(requestBody) {
     .filter(Boolean)
 }
 
+function buildOpenRouterPayload(model, requestBody) {
+  const messages = convertGeminiRequestToOpenRouterMessages(requestBody)
+  const payload = { model, messages }
+
+  const temperature = requestBody?.generationConfig?.temperature
+  const maxTokens = requestBody?.generationConfig?.maxOutputTokens
+
+  if (temperature != null && !Number.isNaN(Number(temperature))) {
+    payload.temperature = Number(temperature)
+  }
+  if (maxTokens != null && !Number.isNaN(Number(maxTokens))) {
+    payload.max_tokens = Number(maxTokens)
+  }
+
+  return payload
+}
+
+function previewOpenRouterPayload(payload) {
+  return {
+    model: payload.model,
+    messageCount: Array.isArray(payload.messages) ? payload.messages.length : 0,
+    messages: (payload.messages || []).map((msg) => {
+      if (typeof msg.content === 'string') {
+        return {
+          role: msg.role,
+          content:
+            msg.content.length > 160
+              ? `${msg.content.slice(0, 160)}… (${msg.content.length} chars)`
+              : msg.content,
+        }
+      }
+
+      if (!Array.isArray(msg.content)) {
+        return { role: msg.role, content: typeof msg.content }
+      }
+
+      return {
+        role: msg.role,
+        parts: msg.content.map((part) => {
+          if (part?.type === 'image_url') {
+            const url = String(part?.image_url?.url || '')
+            return {
+              type: 'image_url',
+              bytes: url.startsWith('data:') ? url.length : url.length,
+            }
+          }
+          return {
+            type: part?.type || 'text',
+            textPreview: String(part?.text || '').slice(0, 80),
+          }
+        }),
+      }
+    }),
+    temperature: payload.temperature,
+    max_tokens: payload.max_tokens,
+  }
+}
+
+function buildOpenRouterHeaders(apiKey, referer, title) {
+  const token = sanitizeApiKey(apiKey)
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'HTTP-Referer': String(referer || 'https://arise.health'),
+    'X-Title': String(title || 'ARISE'),
+  }
+
+  return { headers, token }
+}
+
+function logOpenRouterRequestDiagnostics({ model, payload, headers, token, rawKey }) {
+  if (!__DEV__) return
+
+  const keyInfo = describeApiKeyForLogs(token)
+  const auth = describeAuthHeaderPreview(token)
+
+  console.log('[ARISE][OpenRouter] Request diagnostics:', {
+    model,
+    apiKey: {
+      ...keyInfo,
+      lastChars: keyInfo.lastChars,
+      length: keyInfo.length,
+    },
+    tokenLength: auth.tokenLength,
+    authorizationPreview: auth.authorizationPreview,
+    expectedLastChars: '6af8',
+    keyMatchesExpected: keyInfo.lastChars === '6af8',
+    headerKeys: Object.keys(headers),
+    payload: previewOpenRouterPayload(payload),
+  })
+
+  if (keyInfo.lastChars && keyInfo.lastChars !== '6af8') {
+    console.warn(
+      `[ARISE][OpenRouter] Bundled key still stale (lastChars="${keyInfo.lastChars}"). ` +
+        'Run: npm run start:clean'
+    )
+  }
+}
+
 async function openRouterGenerateContent(apiKey, requestBody, timeoutMs = DEFAULT_AI_TIMEOUT_MS) {
-  if (!apiKey) {
+  const rawKey = apiKey ?? getAiApiKey()
+  const { referer, title } = getOpenRouterAttribution()
+  const { headers: resolvedHeaders, token: resolvedToken } = buildOpenRouterHeaders(
+    rawKey,
+    referer,
+    title
+  )
+
+  if (!resolvedToken) {
     throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is not configured')
   }
 
-  const models = getModelCandidates(apiKey)
+  const models = getModelCandidates(resolvedToken)
   let lastError = null
 
   for (const model of models) {
@@ -450,26 +567,40 @@ async function openRouterGenerateContent(apiKey, requestBody, timeoutMs = DEFAUL
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
     try {
-      console.log(`[ARISE] Attempting OpenRouter API with model: ${model}`)
+      const payload = buildOpenRouterPayload(model, requestBody)
+
+      if (!Array.isArray(payload.messages) || payload.messages.length === 0) {
+        throw new Error('OpenRouter request has no messages after conversion')
+      }
+
+      logOpenRouterRequestDiagnostics({
+        model,
+        payload,
+        headers: resolvedHeaders,
+        token: resolvedToken,
+        rawKey,
+      })
+
+      console.log(`[ARISE] OpenRouter POST chat/completions (model: ${model})`)
 
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'http://localhost',
-          'X-Title': 'ARISE',
-        },
-        body: JSON.stringify({
-          model,
-          messages: convertGeminiRequestToOpenRouterMessages(requestBody),
-          temperature: requestBody?.generationConfig?.temperature,
-          max_tokens: requestBody?.generationConfig?.maxOutputTokens,
-        }),
+        headers: resolvedHeaders,
+        body: JSON.stringify(payload),
         signal: controller.signal,
       })
 
-      const json = await res.json()
+      const responseText = await res.text()
+      let json = null
+      try {
+        json = responseText ? JSON.parse(responseText) : null
+      } catch (parseError) {
+        console.warn('[ARISE][OpenRouter] Non-JSON response:', {
+          status: res.status,
+          sample: responseText.slice(0, 200),
+          parseError: parseError?.message,
+        })
+      }
 
       if (res.ok) {
         const content = json?.choices?.[0]?.message?.content ?? ''
@@ -481,8 +612,17 @@ async function openRouterGenerateContent(apiKey, requestBody, timeoutMs = DEFAUL
 
       const apiMessage = normalizeOpenRouterError(
         res.status,
-        extractGeminiErrorMessage(json) || json?.error?.message || json?.message
+        extractGeminiErrorMessage(json) ||
+          json?.error?.message ||
+          json?.message ||
+          (typeof json?.error === 'string' ? json.error : '')
       )
+
+      if (res.status === 401 || res.status === 403) {
+        console.error('[ARISE] OpenRouter auth failed:', apiMessage)
+        throw new Error(apiMessage || `OpenRouter error (${res.status})`)
+      }
+
       const isModelUnavailable =
         res.status === 404 ||
         /model unavailable|not found|not a valid model id|invalid model|unknown model/i.test(apiMessage)
@@ -554,19 +694,20 @@ async function geminiGenerateContent(
   requestBody,
   timeoutMs = DEFAULT_AI_TIMEOUT_MS
 ) {
-  if (!apiKey) {
+  const trimmedKey = sanitizeApiKey(apiKey || getAiApiKey())
+  if (!trimmedKey) {
     throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is not configured')
   }
 
-  if (isOpenRouterKey(apiKey)) {
-    return openRouterGenerateContent(apiKey, requestBody, timeoutMs)
+  if (isOpenRouterKey(trimmedKey)) {
+    return openRouterGenerateContent(trimmedKey, requestBody, timeoutMs)
   }
 
-  const models = getModelCandidates(apiKey)
+  const models = getModelCandidates(trimmedKey)
   let lastError = null
 
   for (const model of models) {
-    const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`
+    const url = `${GEMINI_API_BASE}/${model}:generateContent?key=${encodeURIComponent(trimmedKey)}`
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -625,7 +766,7 @@ async function geminiGenerateContent(
 }
 
 async function extractCBCWithGemini(imageBase64, mimeType, timeoutMs) {
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY
+  const apiKey = getAiApiKey()
   if (!apiKey) throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is missing from .env')
 
   const prompt = `You are a medical data extractor. Analyze this Complete Blood Count (CBC) report image and extract the following test values.
@@ -667,7 +808,7 @@ Important conversion rules:
     timeoutMs
   )
 
-  console.log('[ARISE] Gemini response:', text.substring(0, 100))
+  console.log('[ARISE] Vision extraction response length:', text.length)
 
   const clean = text.replace(/```json\s*/i, '').replace(/```/g, '').trim()
 
@@ -1091,7 +1232,7 @@ function generateFallbackSummary(values, score) {
  * @returns {object} Structured insight with mainInsight, bullets, suggestions
  */
 export async function generateAISummaryFromOCRText(ocrText, timeoutMs, gender = 'female') {
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY
+  const apiKey = getAiApiKey()
 
   if (!ocrText || typeof ocrText !== 'string' || !ocrText.trim()) {
     console.warn('[ARISE] Empty OCR text provided for AI summary')
@@ -1297,7 +1438,7 @@ function generateFallbackMainInsight(abnormalities, score) {
  * Maintains backward compatibility with existing code
  */
 async function generateAISummary(values, score, timeoutMs) {
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY
+  const apiKey = getAiApiKey()
   const fields = ['hemoglobin', 'rbc', 'wbc', 'platelets']
 
   if (fields.some((field) => isUnavailable(values[field]))) {
@@ -1469,7 +1610,7 @@ export async function analyzeReport({
     if (preExtractedText) {
       console.log('[ARISE] Using pre-extracted OCR text provided by caller')
       extractedText = String(preExtractedText || '').trim()
-      console.log('[ARISE][OCR] Pre-extracted text:', extractedText)
+      console.log('[ARISE][OCR] Pre-extracted text length:', extractedText.length)
     }
 
     try {
@@ -1477,7 +1618,11 @@ export async function analyzeReport({
         extractedText = await extractRawTextWithGemini(fileBase64, fileType, timeoutMs)
       }
 
-      console.log('[OCR] Raw OCR text:', extractedText)
+      if (__DEV__) {
+        console.log('[OCR] Raw OCR text sample:', extractedText.slice(0, 240))
+      } else {
+        console.log('[OCR] Raw OCR text length:', extractedText.length)
+      }
 
       if (extractedText) {
         if (isReferenceRangeOnlyDocument(extractedText)) {
@@ -1546,9 +1691,13 @@ export async function analyzeReport({
     }
 
     if (geminiError) {
+      const aiKey = getAiApiKey()
+      const normalizeError = isOpenRouterKey(aiKey)
+        ? normalizeOpenRouterError(0, geminiError)
+        : normalizeGeminiError(geminiError)
       summary = {
         ...(summary || generateFallbackSummary(summaryValues, score)),
-        confidenceNote: `Extraction fallback applied: ${normalizeGeminiError(geminiError)}`,
+        confidenceNote: `Extraction fallback applied: ${normalizeError}`,
       }
     }
 
@@ -1625,7 +1774,7 @@ export async function analyzeReport({
 }
 
 async function extractRawTextWithGemini(fileBase64, mimeType, timeoutMs) {
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY
+  const apiKey = getAiApiKey()
   if (!apiKey) {
     throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is missing from .env')
   }
@@ -1921,7 +2070,7 @@ function hasPatientValueEvidence(rawText, field) {
  * Returns extracted plain text, or an empty string when OCR is unavailable.
  */
 export async function callGoogleVisionOcr(imageBase64, mimeType) {
-  const apiKey = process.env.EXPO_PUBLIC_VISION_API_KEY
+  const apiKey = getVisionApiKey()
   if (!apiKey) {
     console.warn('[ARISE] Vision OCR skipped: EXPO_PUBLIC_VISION_API_KEY is not configured')
     return ''
@@ -1959,7 +2108,7 @@ export async function callGoogleVisionOcr(imageBase64, mimeType) {
     }
 
     const res = await fetch(
-      `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
+      `https://vision.googleapis.com/v1/images:annotate?key=${encodeURIComponent(apiKey)}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

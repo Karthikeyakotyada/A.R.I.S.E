@@ -269,7 +269,7 @@ export default function UploadReportScreen({ navigation }) {
           
           console.log('[ARISE] Base64 size before Vision OCR:', base64?.length || 0)
           preExtractedText = await callGoogleVisionOcr(base64, selectedFile.mimeType)
-          console.log('[ARISE][OCR] Vision OCR text from upload:', preExtractedText)
+          console.log('[ARISE][OCR] Vision OCR text length:', preExtractedText?.length || 0)
           setUploadProgress(15)
         } catch (ocrErr) {
           console.warn('[ARISE] Vision OCR failed, continuing without pre-read:', ocrErr)

@@ -425,48 +425,6 @@ export default function Signup() {
   )
 }
 
-  return (
-    <div className="auth-bg min-h-screen flex items-center justify-center p-4 py-12">
-      <div className="w-full max-w-md animate-slide-up">
-
-        {/* ARISE Logo + Branding */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-600 to-secondary-500 shadow-lg shadow-primary-200 mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="white" className="w-8 h-8">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
-            A<span className="text-primary-600">.</span>R<span className="text-primary-600">.</span>I<span className="text-primary-600">.</span>S<span className="text-primary-600">.</span>E
-          </h1>
-          <p className="text-slate-500 text-sm mt-1 font-medium">AI Driven Report Insight & Smart Evaluation</p>
-        </div>
-
-        {/* Auth Card */}
-        <div className="auth-card">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-slate-900">Create your account</h2>
-            <p className="text-slate-500 text-sm mt-1">Join ARISE and unlock AI-powered health insights</p>
-          </div>
-
-          {/* Error Alert */}
-          {error && (
-            <div className="alert-error mb-5 animate-fade-in">
-              <AlertIcon />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Success Alert */}
-          {success && (
-            <div className="alert-success mb-5 animate-fade-in">
-              <CheckIcon />
-              <span>{success}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSignup} className="space-y-5" noValidate>
-
             {/* Full Name */}
             <div>
               <label htmlFor="name" className="label">Full Name</label>

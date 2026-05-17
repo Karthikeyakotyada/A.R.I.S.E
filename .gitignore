@@ -4,16 +4,36 @@
 node_modules/
 .pnp
 .pnp.js
+
+# Expo / Metro generated (may inline EXPO_PUBLIC_* secrets)
 .expo/
+.expo-shared/
+.expo-verify/
+.expo-web-check/
+.expo-env-check/
+.expo-env-check2/
+mobile/.expo/
+mobile/.expo-verify/
+mobile/.expo-shared/
+mobile/.expo-web-check/
+mobile/.expo-env-check/
+mobile/.expo-env-check2/
 
 # Build output
 dist/
 dist-ssr/
+web-build/
+mobile/dist/
+mobile/web-build/
 
 # Environment files (NEVER commit these)
 .env
 .env.local
 .env.*.local
+mobile/.env
+
+# Source maps (can embed env literals)
+*.map
 
 # Editor directories
 .vscode/

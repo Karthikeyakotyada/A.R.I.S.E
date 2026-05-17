@@ -27,7 +27,7 @@ The authentication flow now works seamlessly:
 ```env
 # Added VITE_ prefixed variables for Vite build
 VITE_SUPABASE_URL=https://fnneeunwmjuhzcagiclv.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_zw4j5k3_OxtmF16l3M_M3Q_vRD0-puA
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
 
 ### 2. Auth Context (`src/context/AuthContext.jsx`)

@@ -69,22 +69,51 @@ export async function updateReportStatus(reportId, status) {
   return { success: true }
 }
 
+function buildAnalysisFailureMessage(result) {
+  if (!result) return 'Analysis failed for an unknown reason.'
+  if (result.error) return String(result.error)
+  if (result.data && !hasDetectedValues(result.data)) {
+    return 'No CBC values detected. Please upload a clearer report and retry.'
+  }
+  return 'Analysis failed. Please try again.'
+}
+
 export async function analyzeExistingReport({ reportId, fileUri, filePath, fileType, timeoutMs = 35000, preExtractedText = null }) {
-  await updateReportStatus(reportId, REPORT_ANALYSIS_STATUS.PENDING)
+  const statusUpdate = await updateReportStatus(reportId, REPORT_ANALYSIS_STATUS.PENDING)
+  if (!statusUpdate.success) {
+    console.warn('[ARISE] Could not mark report as pending:', statusUpdate.error)
+  }
 
-  const result = await analyzeReport({
-    reportId,
-    fileUri,
-    filePath,
-    fileType,
-    timeoutMs,
-    preExtractedText,
-  })
+  let result
+  try {
+    result = await analyzeReport({
+      reportId,
+      fileUri,
+      filePath,
+      fileType,
+      timeoutMs,
+      preExtractedText,
+    })
+  } catch (error) {
+    console.error('[ARISE] analyzeReport threw:', error?.message || error)
+    result = {
+      success: false,
+      error: error?.message || 'Analysis pipeline crashed',
+    }
+  }
 
-  await updateReportStatus(
-    reportId,
-    result.success ? REPORT_ANALYSIS_STATUS.COMPLETE : REPORT_ANALYSIS_STATUS.FAILED
-  )
+  const nextStatus = result.success
+    ? REPORT_ANALYSIS_STATUS.COMPLETE
+    : REPORT_ANALYSIS_STATUS.FAILED
+
+  const finalStatusUpdate = await updateReportStatus(reportId, nextStatus)
+  if (!finalStatusUpdate.success) {
+    console.warn('[ARISE] Could not update report status:', finalStatusUpdate.error)
+  }
+
+  if (!result.success && !result.error) {
+    result.error = buildAnalysisFailureMessage(result)
+  }
 
   return result
 }

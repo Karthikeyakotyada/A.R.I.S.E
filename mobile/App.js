@@ -8,6 +8,9 @@ import { ToastProvider } from './src/context/ToastContext'
 import RootNavigator from './src/navigation/RootNavigator'
 import AppErrorBoundary from './src/components/AppErrorBoundary'
 import { theme } from './src/lib/theme'
+import { logEnvDiagnostics } from './src/lib/env'
+
+logEnvDiagnostics()
 
 const defaultGlobalErrorHandler = global.ErrorUtils?.getGlobalHandler?.()
 
