@@ -1,137 +1,54 @@
- ARISE – AI Health Companion
+# ARISE – AI Health Companion
 
-**ARISE** is an intelligent health companion app that helps users track, analyze, and understand their health reports effortlessly using AI.
+**ARISE** helps users track, analyze, and understand health reports using AI, with Supabase for auth and storage.
 
-It combines **medical data extraction, health monitoring, and smart insights** into a clean, modern, and user-friendly experience.
+## Architecture
 
----
+| Path | Purpose |
+|------|---------|
+| **`mobile/`** | **Primary app** — Expo / React Native (Android, iOS, Expo web) |
+| `legacy-web/` | Archived Vite web client (not production) |
+| `supabase/` | Database schema and SQL migrations |
 
-## 🌟 Key Features
+## Quick start
 
-### 🧠 AI-Powered Report Analysis
+```bash
+cd mobile
+npm install
+cp .env.example .env   # add your EXPO_PUBLIC_* keys
+npm start
+```
 
-* Upload CBC reports (PDF)
-* Automatically extract key values (Hemoglobin, RBC, WBC, Platelets)
-* Get **instant AI-based health insights & summary**
+Or from the repo root:
 
----
+```bash
+npm start
+```
 
-### 📊 Smart Health Dashboard
+Use `npm run start:clean` inside `mobile/` after changing `.env`.
 
-* View vitals at a glance:
+## Environment
 
-  * ❤️ Heart Rate
-  * 🩸 Blood Pressure
-  * 🍬 Blood Sugar
-  * 🌡 Temperature
-* Real-time status indicators (Normal / Elevated / Stage 1)
+All secrets and public config live in **`mobile/.env`**:
 
----
+- `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+- `EXPO_PUBLIC_GEMINI_API_KEY` (OpenRouter or Gemini)
+- Optional: `EXPO_PUBLIC_VISION_API_KEY`, `EXPO_PUBLIC_APP_URL`, etc.
 
-### 📝 Health Logs Tracking
+See `mobile/.env.example`.
 
-* Log daily vitals easily
-* Track trends over time
-* Clean UI for quick entry and monitoring
+## Features
 
----
+- AI-powered CBC report upload and analysis
+- OCR (Google Vision when configured)
+- Supabase auth, storage, and RLS-backed data
+- Dashboard, health logs, report library, analysis history
+- Profile and OAuth (Google)
 
-### 📂 Report Library & History
+## Legacy web app
 
-* Store all uploaded reports
-* Access previous analysis anytime
-* Health score tracking system
+The old Vite SPA is preserved under `legacy-web/` for reference. Do not use it for new work. See `legacy-web/README.md`.
 
----
-
-### 👤 Modern Profile System
-
-* Editable personal health info:
-
-  * Age, Gender, Blood Group, Height
-  * Emergency Contact
-* Profile picture upload (Supabase Storage)
-* Clean, startup-level UI
-
----
-
-### ☁️ Cloud Powered (Supabase)
-
-* Secure authentication
-* Real-time database
-* File storage (reports & avatars)
-* Row-Level Security (RLS) enabled
-
----
-
-## 🛠️ Tech Stack
-
-* ⚛️ React Native (Expo)
-* 🎨 Modern UI/UX Design
-* 🧠 AI Integration (for report analysis)
-* ☁️ Supabase (Backend + Storage + Auth)
-* 📄 PDF Processing
-
----
-
-## 🎯 Vision
-
-ARISE aims to simplify healthcare by:
-
-* Making medical reports **easy to understand**
-* Providing **instant AI insights**
-* Helping users **track and improve their health proactively**
-
----
-
-## 🚧 Future Enhancements
-
-* 📈 Graph-based health trends
-* 🤖 Advanced AI recommendations
-* 🔔 Smart health alerts & reminders
-* 🧬 Personalized health suggestions
-* 📱 Full production-ready mobile deployment
-
----
-
-## 💡 Why ARISE?
-
-Most health apps are either:
-
-* Too complex ❌
-* Too basic ❌
-
-**ARISE balances both** by providing:
-✔ Simplicity
-✔ Intelligence
-✔ Clean user experience
-
----
-
-## 📸 Screenshots
-
-*(Add your app screenshots here — Dashboard, Upload, Profile, etc.)*
-
----
-
-## 👨‍💻 Developer
+## Developer
 
 **K. Karthikeya**
-Passionate about building impactful applications combining **AI + real-world problems**
-
----
-
-## ⭐ Final Note
-
-This project reflects:
-
-* Real-world problem solving
-* UI/UX thinking
-* Backend + AI integration
-* Startup-level execution mindset
-
----
-
-💚 *“Your health, simplified with AI.”*
-
----

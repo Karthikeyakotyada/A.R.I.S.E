@@ -4,10 +4,8 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "sync-env": "node scripts/sync-env.cjs",
-    "prestart": "node scripts/sync-env.cjs",
     "start": "expo start",
-    "start:clean": "node scripts/sync-env.cjs && expo start -c",
+    "start:clean": "expo start -c",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web"
@@ -44,6 +42,7 @@
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
+    "dotenv": "^16.6.1",
     "typescript": "~5.9.2"
   }
 }

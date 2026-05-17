@@ -143,10 +143,7 @@ export function logEnvDiagnostics() {
   console.log('[ARISE] Env startup diagnostics:', {
     envSource: envMeta?.primarySource ?? '(unknown — restart Metro after .env change)',
     loadedFrom: envMeta?.loadedFrom ?? [],
-    fileSuffixes: {
-      root: envMeta?.rootEnvSuffix ?? null,
-      mobile: envMeta?.mobileEnvSuffix ?? null,
-    },
+    mobileEnvSuffix: envMeta?.mobileEnvSuffix ?? null,
     supabase: Boolean(getSupabaseUrl()),
     aiKey: {
       ...aiKey,
@@ -158,14 +155,11 @@ export function logEnvDiagnostics() {
     aiProvider: provider,
     aiModel: getGeminiModel() || '(default)',
     visionOcr: Boolean(getVisionApiKey()),
-    expectedLastChars: '6af8',
-    keyMatchesExpected: aiKey.lastChars === '6af8',
   })
 
-  if (aiKey.lastChars && aiKey.lastChars !== '6af8') {
+  if (!getSupabaseUrl() || !getAiApiKey()) {
     console.warn(
-      `[ARISE][env] STALE KEY DETECTED (lastChars="${aiKey.lastChars}"). ` +
-        'Save ../.env, run: node scripts/sync-env.cjs && npx expo start -c'
+      '[ARISE][env] Missing Supabase or AI keys in mobile/.env — copy mobile/.env.example, then: npx expo start -c'
     )
   }
 }

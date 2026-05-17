@@ -1,12 +1,10 @@
 /**
- * Single source of truth for loading A.R.I.S.E env files into process.env
- * before Expo/Metro reads EXPO_PUBLIC_* for bundle inlining.
+ * Load mobile/.env into process.env before Expo/Metro inlines EXPO_PUBLIC_*.
  */
 const fs = require('fs')
 const path = require('path')
 const dotenv = require('dotenv')
 
-const ROOT_ENV = path.resolve(__dirname, '../.env')
 const MOBILE_ENV = path.resolve(__dirname, '.env')
 
 const EXPO_PUBLIC_KEYS = [
@@ -37,20 +35,10 @@ function clearStaleShellExpoPublicVars() {
   }
 }
 
-/**
- * Load env in fixed order (both files should stay in sync):
- * 1. Repo root A.R.I.S.E/.env
- * 2. mobile/.env (optional override)
- */
 function loadProjectEnv() {
   clearStaleShellExpoPublicVars()
 
   const loadedFrom = []
-
-  if (fs.existsSync(ROOT_ENV)) {
-    dotenv.config({ path: ROOT_ENV, override: true })
-    loadedFrom.push(ROOT_ENV)
-  }
 
   if (fs.existsSync(MOBILE_ENV)) {
     dotenv.config({ path: MOBILE_ENV, override: true })
@@ -58,16 +46,10 @@ function loadProjectEnv() {
   }
 
   const aiKey = String(process.env.EXPO_PUBLIC_GEMINI_API_KEY || '').trim()
-  const primarySource = fs.existsSync(MOBILE_ENV)
-    ? MOBILE_ENV
-    : fs.existsSync(ROOT_ENV)
-      ? ROOT_ENV
-      : null
 
   return {
     loadedFrom,
-    primarySource,
-    rootEnvSuffix: fileKeySuffix(ROOT_ENV),
+    primarySource: loadedFrom[0] ?? null,
     mobileEnvSuffix: fileKeySuffix(MOBILE_ENV),
     runtimeSuffix: aiKey.slice(-4) || null,
     runtimeLength: aiKey.length,
@@ -77,26 +59,21 @@ function loadProjectEnv() {
 
 function buildEnvMeta(loadResult) {
   return {
-    loadedFrom: loadResult.loadedFrom.map((p) => path.basename(path.dirname(p)) + '/' + path.basename(p)),
+    loadedFrom: loadResult.loadedFrom.map(
+      (p) => path.basename(path.dirname(p)) + '/' + path.basename(p)
+    ),
     primarySource: loadResult.primarySource
       ? path.basename(path.dirname(loadResult.primarySource)) +
         '/' +
         path.basename(loadResult.primarySource)
-      : '(none)',
-    rootEnvSuffix: loadResult.rootEnvSuffix,
+      : '(none — copy mobile/.env.example to mobile/.env)',
     mobileEnvSuffix: loadResult.mobileEnvSuffix,
     bundledKeySuffix: loadResult.runtimeSuffix,
     bundledKeyLength: loadResult.runtimeLength,
-    expectedSuffix: '6af8',
-    keysMatchExpected:
-      loadResult.runtimeSuffix === '6af8' ||
-      loadResult.mobileEnvSuffix === '6af8' ||
-      loadResult.rootEnvSuffix === '6af8',
   }
 }
 
 module.exports = {
-  ROOT_ENV,
   MOBILE_ENV,
   loadProjectEnv,
   buildEnvMeta,

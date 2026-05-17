@@ -23,6 +23,54 @@ if (!supabaseUrl || !supabaseAnonKey) {
   )
 }
 
+function createDebugFetch(label) {
+  const baseFetch = globalThis.fetch?.bind(globalThis)
+
+  if (!baseFetch) {
+    return undefined
+  }
+
+  return async (input, init) => {
+    const requestUrl = typeof input === 'string' ? input : input?.url || String(input)
+    const method = init?.method || (typeof input === 'object' && input?.method) || 'GET'
+    const startedAt = Date.now()
+
+    try {
+      const response = await baseFetch(input, init)
+
+      if (__DEV__) {
+        console.info('[ARISE][supabase]', {
+          label,
+          requestUrl,
+          method,
+          status: response.status,
+          statusText: response.statusText,
+          ms: Date.now() - startedAt,
+        })
+      }
+
+      return response
+    } catch (error) {
+      if (__DEV__) {
+        console.error('[ARISE][supabase]', {
+          label,
+          requestUrl,
+          method,
+          ms: Date.now() - startedAt,
+          errorName: error?.name,
+          errorMessage: error?.message,
+          errorCode: error?.code,
+          causeName: error?.cause?.name,
+          causeMessage: error?.cause?.message,
+          causeCode: error?.cause?.code,
+        })
+      }
+
+      throw error
+    }
+  }
+}
+
 export function isInvalidRefreshTokenError(error) {
   const message = error?.message || error?.error_description || ''
   return /invalid refresh token|refresh token not found|jwt expired|invalid jwt/i.test(
@@ -131,6 +179,9 @@ export async function ensureValidSession() {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    fetch: createDebugFetch('native'),
+  },
   auth: {
     storage: AsyncStorage,
     storageKey: authStorageKey,

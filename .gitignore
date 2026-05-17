@@ -2,6 +2,7 @@
 
 # Dependencies
 node_modules/
+legacy-web/node_modules/
 .pnp
 .pnp.js
 
@@ -22,6 +23,7 @@ mobile/.expo-env-check2/
 # Build output
 dist/
 dist-ssr/
+legacy-web/dist/
 web-build/
 mobile/dist/
 mobile/web-build/
@@ -30,6 +32,7 @@ mobile/web-build/
 .env
 .env.local
 .env.*.local
+legacy-web/.env
 mobile/.env
 
 # Source maps (can embed env literals)

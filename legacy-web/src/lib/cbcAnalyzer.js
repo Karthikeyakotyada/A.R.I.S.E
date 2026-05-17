@@ -91,7 +91,8 @@ async function fetchBase64ViaSignedUrl(filePath) {
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1/models'
 
 // Get API key from environment
-const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || ''
+const GEMINI_API_KEY =
+  import.meta.env.EXPO_PUBLIC_GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || ''
 
 const GEMINI_MODEL_CANDIDATES = [
   'gemini-1.5-flash',

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'arise-cache-v1';
+const CACHE_NAME = 'arise-cache-v2';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
@@ -25,9 +25,13 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  const requestUrl = new URL(request.url);
 
   // Only handle GET requests
   if (request.method !== 'GET') return;
+
+  // Let external APIs, including Supabase, use the browser network stack directly.
+  if (requestUrl.origin !== self.location.origin) return;
 
   // Network first for navigation and static assets
   event.respondWith(

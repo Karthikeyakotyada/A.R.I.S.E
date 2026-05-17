@@ -1,4 +1,3 @@
-const path = require('path')
 const { loadProjectEnv, buildEnvMeta } = require('./loadEnv.cjs')
 
 const envLoad = loadProjectEnv()
@@ -12,15 +11,16 @@ if (
   process.env.EXPO_PUBLIC_VISION_API_KEY = process.env.GOOGLE_APPLICATION_CREDENTIALS
 }
 
-if (envMeta.bundledKeySuffix && envMeta.bundledKeySuffix !== '6af8') {
+if (!envLoad.loadedFrom.length) {
   console.warn(
-    `[ARISE][env] WARNING: bundled AI key suffix is "${envMeta.bundledKeySuffix}" (expected "6af8"). ` +
-      `Run: node scripts/sync-env.cjs && npx expo start -c`
+    `[ARISE][env] No mobile/.env found. Copy mobile/.env.example → mobile/.env, then: npx expo start -c`
   )
-} else {
+} else if (envMeta.bundledKeySuffix) {
   console.log(
     `[ARISE][env] Loaded OK — suffix: ${envMeta.bundledKeySuffix}, source: ${envMeta.primarySource}`
   )
+} else {
+  console.log(`[ARISE][env] Loaded from ${envMeta.primarySource} (no AI key set)`)
 }
 
 const appJson = require('./app.json')
