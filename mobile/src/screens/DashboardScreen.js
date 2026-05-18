@@ -20,7 +20,7 @@ import { supabase } from '../lib/supabaseClient'
 import { Card, EmptyState, Heading, Screen, Subtle } from '../components/ui'
 import { formatDate } from '../lib/helpers'
 import PageHeader from '../components/PageHeader'
-import StatCard from '../components/StatCard'
+import AnnouncementCarousel from '../components/AnnouncementCarousel'
 import AnimatedListItem from '../components/AnimatedListItem'
 import { LinearGradient } from 'expo-linear-gradient'
 import { typography } from '../lib/typography'
@@ -53,7 +53,6 @@ const HEALTH_SEVERITY_COLORS = {
 
 export default function DashboardScreen({ navigation }) {
   const { user } = useAuth()
-  const [reportCount, setReportCount] = useState(0)
   const [recentLogs, setRecentLogs] = useState([])
   const [refreshing, setRefreshing] = useState(false)
   const [profileAvatarUrl, setProfileAvatarUrl] = useState(null)
@@ -77,8 +76,7 @@ export default function DashboardScreen({ navigation }) {
     if (!user) return
     setRefreshing(true)
     try {
-      const [{ data: reports }, { data: logs }, { data: profile }] = await Promise.all([
-        supabase.from('reports').select('id').eq('user_id', user.id),
+      const [{ data: logs }, { data: profile }] = await Promise.all([
         supabase
           .from('health_logs')
           .select('*')
@@ -92,7 +90,6 @@ export default function DashboardScreen({ navigation }) {
           .maybeSingle(),
       ])
 
-      setReportCount(reports?.length || 0)
       setRecentLogs((logs || []).slice(0, MAX_RECENT_LOGS))
       setProfileAvatarUrl(profile?.avatar_url || null)
       setProfileName(profile?.name || null)
@@ -224,40 +221,6 @@ export default function DashboardScreen({ navigation }) {
 
     return null
   }
-
-  const getCombinedHealthStatus = (metrics) => {
-    const metricStatuses = [
-      getMetricStatus('hr', metrics.hr),
-      getMetricStatus('bp', metrics.bp),
-      getMetricStatus('sugar', metrics.sugar),
-      getMetricStatus('temp', metrics.temp),
-    ].filter(Boolean)
-
-    if (metricStatuses.length === 0) {
-      return { status: 'Unknown', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
-    }
-
-    if (metricStatuses.some((m) => m.status === 'High')) {
-      return { status: 'High', severity: 'critical', color: HEALTH_SEVERITY_COLORS.critical }
-    }
-    if (
-      metricStatuses.some(
-        (m) =>
-          m.status === 'Elevated' ||
-          m.status === 'Low' ||
-          m.status === 'Stage 1' ||
-          m.status === 'Prediabetes' ||
-          m.status === 'Mild Fever' ||
-          m.severity === 'warning'
-      )
-    ) {
-      return { status: 'Elevated', severity: 'warning', color: HEALTH_SEVERITY_COLORS.warning }
-    }
-
-    return { status: 'Normal', severity: 'normal', color: HEALTH_SEVERITY_COLORS.normal }
-  }
-
-  const healthStatus = getCombinedHealthStatus(averages)
 
   const metricCards = [
     { key: 'hr', emoji: '❤️', label: 'Heart Rate', value: averages.hr, unit: 'bpm' },
@@ -435,7 +398,6 @@ export default function DashboardScreen({ navigation }) {
   const selectedMetricInsight = selectedMetricCard
     ? getMetricInsight(selectedMetricCard.key, selectedMetricCard.value)
     : null
-  const statusSeverityStyle = getSeverityStyle(healthStatus.severity)
   const getLogTimeLabel = (value) => {
     const date = new Date(value)
     if (!Number.isFinite(date.getTime())) return '--:--'
@@ -474,12 +436,6 @@ export default function DashboardScreen({ navigation }) {
       console.error('[ARISE] Dashboard profile navigation failed:', error)
     }
   }
-  const summaryCards = [
-    { key: 'reports', icon: '📄', label: 'Reports', value: String(reportCount) },
-    { key: 'logs', icon: '📈', label: 'Recent Logs', value: String(recentLogs.length) },
-    { key: 'status', icon: '●', label: 'Status', value: healthStatus.status },
-  ]
-
   useEffect(() => {
     if (selectedMetricCard) {
       insightAnim.setValue(0)
@@ -574,58 +530,7 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        <View style={styles.summaryCardsRow}>
-          {summaryCards.map((card) => {
-            const isStatusCard = card.key === 'status'
-            return (
-            <View
-              key={card.key}
-              style={[
-                styles.summaryCard,
-                isStatusCard && {
-                  backgroundColor: statusSeverityStyle.bg,
-                  borderColor: statusSeverityStyle.softBorder,
-                },
-              ]}
-            >
-              <View
-                style={[
-                  styles.summaryIconWrap,
-                  isStatusCard && {
-                    backgroundColor: theme.colors.surface,
-                    borderColor: statusSeverityStyle.softBorder,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.summaryIcon,
-                    isStatusCard && { color: statusSeverityStyle.value },
-                  ]}
-                >
-                  {card.icon}
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.summaryLabel,
-                  isStatusCard && { color: statusSeverityStyle.text },
-                ]}
-              >
-                {card.label}
-              </Text>
-              <Text
-                style={[
-                  styles.summaryValue,
-                  isStatusCard && { color: statusSeverityStyle.value },
-                ]}
-              >
-                {card.value}
-              </Text>
-            </View>
-            )
-          })}
-        </View>
+        <AnnouncementCarousel />
 
         {/* Key Metrics Grid */}
         <View style={styles.metricsContainer}>
@@ -1037,48 +942,6 @@ function createStyles(theme) {
     color: theme.colors.heroSubtitle,
     lineHeight: 19,
     maxWidth: width - 72,
-  },
-  summaryCardsRow: {
-    marginTop: 2,
-    marginBottom: 16,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  summaryCard: {
-    flex: 1,
-    borderRadius: theme.radius.card,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    backgroundColor: dark ? theme.colors.card : theme.colors.surface,
-    borderWidth: theme.ui.cardBorderWidth,
-    borderColor: borderSubtle,
-    alignItems: 'center',
-    gap: 4,
-    ...(dark ? getCardShadowStyle(theme) : PREMIUM_CARD_SHADOW),
-  },
-  summaryIconWrap: {
-    width: 24,
-    height: 24,
-    borderRadius: 8,
-    backgroundColor: theme.colors.elevated,
-    borderWidth: dark ? 0 : 1,
-    borderColor: theme.colors.borderLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryIcon: {
-    fontSize: 13,
-    color: theme.colors.muted,
-  },
-  summaryLabel: {
-    fontSize: 9,
-    ...typography.style.medium,
-    color: theme.colors.textSecondary,
-  },
-  summaryValue: {
-    fontSize: 13,
-    color: theme.colors.text,
-    ...typography.style.extraBold,
   },
   metricsContainer: {
     marginBottom: 12,
