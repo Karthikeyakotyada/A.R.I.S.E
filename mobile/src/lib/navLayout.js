@@ -2,8 +2,11 @@ import { useContext } from 'react'
 import { Platform } from 'react-native'
 import { BottomTabBarHeightContext } from '@react-navigation/bottom-tabs'
 
-/** Matches RootNavigator floating tab bar height. */
-export const FLOATING_TAB_HEIGHT = 64
+/** Matches FloatingTabBar inner bar height (icon + label). */
+export const FLOATING_TAB_HEIGHT = 72
+
+/** Horizontal inset for floating tab bar. */
+export const FLOATING_TAB_MARGIN_H = 16
 
 const TAB_BOTTOM_OFFSET = 8
 

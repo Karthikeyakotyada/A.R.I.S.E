@@ -41,26 +41,27 @@ export function getFloatingTabShadow(theme) {
   if (Platform.OS === 'web') {
     return dark
       ? {
-          boxShadow:
-            '0px 16px 40px rgba(0, 0, 0, 0.55), 0px 0px 24px rgba(39, 225, 193, 0.06)',
+          boxShadow: '0px 18px 44px rgba(0, 0, 0, 0.52), 0px 2px 10px rgba(0, 0, 0, 0.16)',
         }
-      : { boxShadow: '0px 10px 28px rgba(15, 23, 42, 0.1), 0px 2px 8px rgba(15, 23, 42, 0.05)' }
+      : {
+          boxShadow: '0px 12px 32px rgba(15, 23, 42, 0.12), 0px 4px 12px rgba(15, 23, 42, 0.06)',
+        }
   }
   if (dark) {
     return {
       shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 12 },
-      shadowOpacity: 0.5,
-      shadowRadius: 24,
-      elevation: 14,
+      shadowOffset: { width: 0, height: 14 },
+      shadowOpacity: 0.42,
+      shadowRadius: 22,
+      elevation: 12,
     }
   }
   return {
     shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 18,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
+    elevation: 12,
   }
 }
 
