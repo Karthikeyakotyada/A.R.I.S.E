@@ -2,6 +2,7 @@ import { ActivityIndicator, Platform, Text, View } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
 import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../context/AuthContext'
 import { theme } from '../lib/theme'
 import { typography } from '../lib/typography'
@@ -20,52 +21,112 @@ import AuthCallbackScreen from '../screens/AuthCallbackScreen'
 const Stack = createNativeStackNavigator()
 const Tab = createBottomTabNavigator()
 
-function tabIcon(name, color) {
-  return <Ionicons name={name} size={19} color={color} />
+const TAB_ACTIVE = theme.colors.primary
+const TAB_INACTIVE = '#9aacb5'
+const FLOATING_TAB_HEIGHT = 62
+const FLOATING_TAB_RADIUS = 30
+const FLOATING_TAB_MARGIN_H = 16
+
+const FLOATING_TAB_SHADOW =
+  Platform.OS === 'web'
+    ? { boxShadow: '0px 10px 28px rgba(15, 23, 42, 0.1), 0px 2px 8px rgba(15, 23, 42, 0.05)' }
+    : Platform.OS === 'ios'
+      ? {
+          shadowColor: '#0f172a',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.1,
+          shadowRadius: 18,
+        }
+      : { elevation: 10 }
+
+function FloatingTabBarBackground() {
+  return (
+    <View
+      style={{
+        flex: 1,
+        borderRadius: FLOATING_TAB_RADIUS,
+        backgroundColor: theme.colors.surface,
+        borderWidth: 1,
+        borderColor: 'rgba(214, 228, 225, 0.75)',
+        overflow: 'hidden',
+      }}
+    />
+  )
+}
+
+function tabIcon(name, color, focused) {
+  return <Ionicons name={name} size={focused ? 22 : 21} color={color} />
 }
 
 function AppTabs() {
+  const insets = useSafeAreaInsets()
+  const bottomInset = Math.max(insets.bottom, Platform.OS === 'web' ? 12 : 8)
+  const tabBarBottom = bottomInset + 6
+  const sceneBottomPad = tabBarBottom + FLOATING_TAB_HEIGHT + 14
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: '#64748b',
-        tabBarLabelStyle: { ...typography.style.bold, fontSize: 12 },
+        tabBarActiveTintColor: TAB_ACTIVE,
+        tabBarInactiveTintColor: TAB_INACTIVE,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          ...typography.style.semiBold,
+          fontSize: 11,
+          marginTop: 2,
+          marginBottom: Platform.OS === 'ios' ? 0 : 2,
+        },
+        tabBarIconStyle: {
+          marginTop: 4,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 4,
+        },
+        tabBarBackground: FloatingTabBarBackground,
         tabBarStyle: {
-          height: 64,
+          position: 'absolute',
+          left: FLOATING_TAB_MARGIN_H,
+          right: FLOATING_TAB_MARGIN_H,
+          bottom: tabBarBottom,
+          height: FLOATING_TAB_HEIGHT,
+          borderRadius: FLOATING_TAB_RADIUS,
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
           paddingTop: 6,
-          paddingBottom: 8,
-          backgroundColor: '#ffffff',
-          borderTopColor: '#dbe4ef',
-          borderTopWidth: 1,
+          paddingBottom: Platform.OS === 'ios' ? 8 : 6,
+          ...FLOATING_TAB_SHADOW,
+        },
+        sceneContainerStyle: {
+          backgroundColor: theme.colors.bg,
+          paddingBottom: sceneBottomPad,
         },
       }}
     >
       <Tab.Screen
         name="DashboardTab"
         component={DashboardScreen}
-        options={{ title: 'Dashboard', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'grid' : 'grid-outline', color) }}
+        options={{ title: 'Dashboard', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'grid' : 'grid-outline', color, focused) }}
       />
       <Tab.Screen
         name="UploadTab"
         component={UploadReportScreen}
-        options={{ title: 'Upload', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'cloud-upload' : 'cloud-upload-outline', color) }}
+        options={{ title: 'Upload', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'cloud-upload' : 'cloud-upload-outline', color, focused) }}
       />
       <Tab.Screen
         name="ReportsTab"
         component={ReportsScreen}
-        options={{ title: 'Reports', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'document-text' : 'document-text-outline', color) }}
+        options={{ title: 'Reports', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'document-text' : 'document-text-outline', color, focused) }}
       />
       <Tab.Screen
         name="HealthTab"
         component={HealthLogsScreen}
-        options={{ title: 'Health', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'pulse' : 'pulse-outline', color) }}
+        options={{ title: 'Health', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'pulse' : 'pulse-outline', color, focused) }}
       />
       <Tab.Screen
         name="ProfileTab"
         component={ProfileScreen}
-        options={{ title: 'Profile', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'person-circle' : 'person-circle-outline', color) }}
+        options={{ title: 'Profile', tabBarIcon: ({ color, focused }) => tabIcon(focused ? 'person-circle' : 'person-circle-outline', color, focused) }}
       />
     </Tab.Navigator>
   )
