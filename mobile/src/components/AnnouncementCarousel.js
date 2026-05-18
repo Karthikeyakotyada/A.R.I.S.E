@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
-  Dimensions,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import AnnouncementBanner from './AnnouncementBanner'
@@ -16,13 +16,13 @@ import { fetchActiveAnnouncements } from '../lib/announcements'
 import { typography } from '../lib/typography'
 import { isDarkTheme } from '../lib/themeUi'
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window')
 const HORIZONTAL_PAD = 16
 const CARD_GAP = 12
 const AUTO_SCROLL_MS = 5500
 
 export default function AnnouncementCarousel() {
   const { theme, isDark } = useTheme()
+  const { width: viewportWidth } = useWindowDimensions()
   const styles = useMemo(() => createStyles(theme, isDark), [theme, isDark])
   const scrollRef = useRef(null)
   const autoTimerRef = useRef(null)
@@ -32,8 +32,9 @@ export default function AnnouncementCarousel() {
   const [activeIndex, setActiveIndex] = useState(0)
   const fadeAnim = useRef(new Animated.Value(0)).current
 
-  const cardWidth = Math.min(SCREEN_WIDTH - HORIZONTAL_PAD * 2, 420)
+  const cardWidth = Math.min(viewportWidth - HORIZONTAL_PAD * 2, 420)
   const snapInterval = cardWidth + CARD_GAP
+  const leadingOffset = HORIZONTAL_PAD
 
   const loadAnnouncements = useCallback(async () => {
     setLoading(true)
@@ -67,10 +68,10 @@ export default function AnnouncementCarousel() {
     (index) => {
       if (!scrollRef.current || announcements.length === 0) return
       const clamped = ((index % announcements.length) + announcements.length) % announcements.length
-      scrollRef.current.scrollTo({ x: clamped * snapInterval, animated: true })
+      scrollRef.current.scrollTo({ x: leadingOffset + clamped * snapInterval, animated: true })
       setActiveIndex(clamped)
     },
-    [announcements.length, snapInterval]
+    [announcements.length, leadingOffset, snapInterval]
   )
 
   useEffect(() => {
@@ -89,12 +90,12 @@ export default function AnnouncementCarousel() {
   const onScroll = useCallback(
     (event) => {
       const offsetX = event.nativeEvent.contentOffset.x
-      const index = Math.round(offsetX / snapInterval)
+      const index = Math.round((offsetX - leadingOffset) / snapInterval)
       if (index !== activeIndex && index >= 0 && index < announcements.length) {
         setActiveIndex(index)
       }
     },
-    [activeIndex, announcements.length, snapInterval]
+    [activeIndex, announcements.length, leadingOffset, snapInterval]
   )
 
   const onScrollBeginDrag = useCallback(() => {
@@ -140,43 +141,46 @@ export default function AnnouncementCarousel() {
         </View>
       </View>
 
-      <Animated.View style={{ opacity: fadeAnim }}>
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          snapToInterval={snapInterval}
-          snapToAlignment="start"
-          disableIntervalMomentum
-          contentContainerStyle={styles.scrollContent}
-          onScroll={onScroll}
-          onScrollBeginDrag={onScrollBeginDrag}
-          onScrollEndDrag={onScrollEndDrag}
-          onMomentumScrollEnd={onMomentumScrollEnd}
-          scrollEventThrottle={16}
-        >
-          {announcements.map((item, index) => (
-            <View
-              key={item.id}
-              style={index < announcements.length - 1 ? styles.cardSpacer : null}
-            >
-              <AnnouncementBanner item={item} index={index} width={cardWidth} />
-            </View>
-          ))}
-        </ScrollView>
-
-        {announcements.length > 1 ? (
-          <View style={styles.dotsRow}>
+      <View style={styles.carouselViewport}>
+        <Animated.View style={{ opacity: fadeAnim }}>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            snapToInterval={snapInterval}
+            snapToAlignment="start"
+            disableIntervalMomentum
+            contentContainerStyle={styles.scrollContent}
+            onScroll={onScroll}
+            onScrollBeginDrag={onScrollBeginDrag}
+            onScrollEndDrag={onScrollEndDrag}
+            onMomentumScrollEnd={onMomentumScrollEnd}
+            scrollEventThrottle={16}
+            style={styles.scrollView}
+          >
             {announcements.map((item, index) => (
               <View
-                key={`dot-${item.id}`}
-                style={[styles.dot, index === activeIndex && styles.dotActive]}
-              />
+                key={item.id}
+                style={index < announcements.length - 1 ? styles.cardSpacer : null}
+              >
+                <AnnouncementBanner item={item} index={index} width={cardWidth} />
+              </View>
             ))}
-          </View>
-        ) : null}
-      </Animated.View>
+          </ScrollView>
+
+          {announcements.length > 1 ? (
+            <View style={styles.dotsRow}>
+              {announcements.map((item, index) => (
+                <View
+                  key={`dot-${item.id}`}
+                  style={[styles.dot, index === activeIndex && styles.dotActive]}
+                />
+              ))}
+            </View>
+          ) : null}
+        </Animated.View>
+      </View>
     </View>
   )
 }
@@ -187,6 +191,18 @@ function createStyles(theme, isDark) {
     section: {
       marginTop: 4,
       marginBottom: 18,
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden',
+    },
+    carouselViewport: {
+      width: '100%',
+      maxWidth: '100%',
+      overflow: 'hidden',
+    },
+    scrollView: {
+      width: '100%',
+      maxWidth: '100%',
     },
     headerRow: {
       flexDirection: 'row',
