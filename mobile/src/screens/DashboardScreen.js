@@ -24,7 +24,9 @@ import StatCard from '../components/StatCard'
 import AnimatedListItem from '../components/AnimatedListItem'
 import { LinearGradient } from 'expo-linear-gradient'
 import { typography } from '../lib/typography'
+import { useTheme } from '../context/ThemeContext'
 import { formatHeroDateLine, formatHeroGreeting, resolveDisplayName } from '../lib/greeting'
+import { getCardShadowStyle, getHeroGradientColors, getScreenBackgroundColors, getSeverityPalette, isDarkTheme } from '../lib/themeUi'
 
 const { width } = Dimensions.get('window')
 const PREMIUM_CARD_SHADOW =
@@ -42,7 +44,6 @@ const METRIC_ACTIVE_SHADOW_STYLE =
     ? { boxShadow: '0px 10px 24px rgba(15,23,42,0.14)' }
     : {}
 
-const SOFT_BORDER_COLOR = '#e2e8f0'
 const MAX_RECENT_LOGS = 3
 const HEALTH_SEVERITY_COLORS = {
   normal: '#16a34a',
@@ -67,6 +68,10 @@ export default function DashboardScreen({ navigation }) {
   )
   const heroGreeting = useMemo(() => formatHeroGreeting(displayName), [displayName])
   const heroDateLine = useMemo(() => formatHeroDateLine(), [])
+  const { theme, isDark } = useTheme()
+  const styles = useMemo(() => createStyles(theme), [theme])
+  const heroGradientColors = useMemo(() => getHeroGradientColors(theme), [theme])
+  const screenGradientColors = useMemo(() => getScreenBackgroundColors(theme), [theme])
 
   const loadDashboard = useCallback(async () => {
     if (!user) return
@@ -423,31 +428,7 @@ export default function DashboardScreen({ navigation }) {
   }
 
   function getSeverityStyle(severity) {
-    if (severity === 'normal') {
-      return {
-        bg: '#ecfdf5',
-        border: '#86efac',
-        text: '#166534',
-        value: '#15803d',
-        softBorder: '#bbf7d0',
-      }
-    }
-    if (severity === 'critical') {
-      return {
-        bg: '#fef2f2',
-        border: '#fca5a5',
-        text: '#b91c1c',
-        value: '#dc2626',
-        softBorder: '#fecaca',
-      }
-    }
-    return {
-      bg: '#fff7ed',
-      border: '#fdba74',
-      text: '#9a3412',
-      value: '#c2410c',
-      softBorder: '#fed7aa',
-    }
+    return getSeverityPalette(theme, severity)
   }
 
   const selectedMetricCard = metricCards.find((metric) => metric.key === selectedMetric) || null
@@ -512,6 +493,16 @@ export default function DashboardScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {isDark ? (
+        <LinearGradient
+          colors={screenGradientColors}
+          locations={[0, 0.5, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      ) : null}
       <View style={styles.brandingBar}>
         <View style={styles.brandingLeft}>
           <View style={styles.logoWrap}>
@@ -543,20 +534,29 @@ export default function DashboardScreen({ navigation }) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={loadDashboard}
-            tintColor="#1e5a4a"
-            colors={['#1e5a4a', '#2a7d6b']}
+            tintColor={theme.colors.primary}
+            colors={[theme.colors.primary, theme.colors.primaryDark]}
           />
         }
       >
         {/* Hero Section */}
         <View style={styles.heroCard}>
           <LinearGradient
-            colors={['#119e8f', '#0f766e', '#0b5f57', '#094f48']}
-            locations={[0, 0.4, 0.75, 1]}
+            colors={heroGradientColors}
+            locations={isDark ? [0, 0.35, 0.7, 1] : [0, 0.4, 0.75, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={StyleSheet.absoluteFill}
           />
+          {isDark ? (
+            <LinearGradient
+              colors={['rgba(39, 225, 193, 0.12)', 'transparent', 'rgba(24, 182, 255, 0.06)']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+              pointerEvents="none"
+            />
+          ) : null}
           <View style={styles.heroGradientTop} />
           <View style={styles.heroGradientBottom} />
           <View style={styles.heroSheen} />
@@ -592,7 +592,7 @@ export default function DashboardScreen({ navigation }) {
                 style={[
                   styles.summaryIconWrap,
                   isStatusCard && {
-                    backgroundColor: '#ffffff',
+                    backgroundColor: theme.colors.surface,
                     borderColor: statusSeverityStyle.softBorder,
                   },
                 ]}
@@ -646,12 +646,11 @@ export default function DashboardScreen({ navigation }) {
                 style={({ pressed, hovered }) => [
                   styles.metricCard,
                   {
-                    backgroundColor: severity.bg,
+                    backgroundColor: isDark ? severity.tint || theme.colors.elevated : severity.bg,
                     borderColor: severity.softBorder,
                   },
                   selectedMetric === metric.key && styles.metricCardActive,
                   selectedMetric === metric.key && {
-                    backgroundColor: severity.bg,
                     borderColor: severity.border,
                   },
                   hovered && styles.metricCardHover,
@@ -667,12 +666,28 @@ export default function DashboardScreen({ navigation }) {
               >
                 <View style={styles.metricTopRow}>
                   <View style={styles.metricHeader}>
-                    <View style={[styles.metricIconBubble, { backgroundColor: '#ffffff', borderColor: severity.softBorder }]}>
+                    <View
+                      style={[
+                        styles.metricIconBubble,
+                        {
+                          backgroundColor: isDark ? 'rgba(17, 28, 36, 0.85)' : theme.colors.surface,
+                          borderColor: severity.softBorder,
+                        },
+                      ]}
+                    >
                       <Text style={styles.metricIcon}>{metric.emoji}</Text>
                     </View>
                     <Text style={styles.metricLabel}>{metric.label}</Text>
                   </View>
-                  <View style={[styles.metricStatusPill, { backgroundColor: '#ffffff', borderColor: severity.softBorder }]}>
+                  <View
+                    style={[
+                      styles.metricStatusPill,
+                      {
+                        backgroundColor: isDark ? 'rgba(17, 28, 36, 0.72)' : theme.colors.surface,
+                        borderColor: severity.softBorder,
+                      },
+                    ]}
+                  >
                     <Text style={[styles.metricStatusText, { color: severity.text }]}>{insight.status}</Text>
                   </View>
                 </View>
@@ -841,16 +856,19 @@ export default function DashboardScreen({ navigation }) {
   )
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme) {
+  const dark = isDarkTheme(theme)
+  const borderSubtle = theme.colors.borderSubtle
+  return StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: theme.colors.background,
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
   },
   brandingBar: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    backgroundColor: dark ? theme.colors.bar : theme.colors.surface,
+    borderBottomWidth: dark ? 0 : 1,
+    borderBottomColor: theme.colors.borderLight,
     paddingHorizontal: 16,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -867,9 +885,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#e8f6f3',
+    backgroundColor: theme.colors.logoBg,
     borderWidth: 1,
-    borderColor: '#cfe8e3',
+    borderColor: theme.colors.logoBorder,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -881,21 +899,21 @@ const styles = StyleSheet.create({
   brandName: {
     fontSize: 15,
     ...typography.style.extraBold,
-    color: '#0b1220',
+    color: theme.colors.text,
     letterSpacing: 0.5,
   },
   brandSubtitle: {
     fontSize: 9,
     ...typography.style.medium,
-    color: '#7b8a9d',
+    color: theme.colors.textSecondary,
   },
   avatarWrap: {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#ecfdf5',
+    backgroundColor: theme.colors.avatarBg,
     borderWidth: 1,
-    borderColor: '#86efac',
+    borderColor: theme.colors.avatarBorder,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -910,7 +928,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 13,
     ...typography.style.bold,
-    color: '#166534',
+    color: theme.colors.avatarText,
   },
   container: {
     flex: 1,
@@ -922,19 +940,23 @@ const styles = StyleSheet.create({
   heroCard: {
     marginTop: 8,
     marginBottom: 10,
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 100,
-    backgroundColor: '#0f766e',
+    borderRadius: theme.radius.hero,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    minHeight: 108,
+    backgroundColor: dark ? theme.colors.heroTeal : '#0f766e',
     overflow: 'hidden',
     position: 'relative',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    ...INTERACTIVE_CARD_SHADOW,
-    ...(Platform.OS === 'web'
-      ? { boxShadow: '0px 8px 24px rgba(11,95,87,0.28), 0px 2px 8px rgba(15,23,42,0.06)' }
-      : { elevation: 4 }),
+    borderWidth: dark ? 1 : 1,
+    borderColor: dark ? 'rgba(39, 225, 193, 0.12)' : 'rgba(255,255,255,0.1)',
+    ...(dark
+      ? getCardShadowStyle(theme)
+      : {
+          ...INTERACTIVE_CARD_SHADOW,
+          ...(Platform.OS === 'web'
+            ? { boxShadow: '0px 8px 24px rgba(11,95,87,0.28), 0px 2px 8px rgba(15,23,42,0.06)' }
+            : { elevation: 4 }),
+        }),
   },
   heroGradientTop: {
     position: 'absolute',
@@ -942,7 +964,7 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     height: '50%',
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: dark ? 'rgba(24, 182, 255, 0.05)' : 'rgba(255,255,255,0.07)',
   },
   heroGradientBottom: {
     position: 'absolute',
@@ -950,14 +972,14 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: '45%',
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: dark ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.08)',
   },
   heroSheen: {
     position: 'absolute',
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: dark ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.03)',
     left: -40,
     top: -48,
   },
@@ -966,7 +988,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: dark ? theme.colors.heroGlowAccent : 'rgba(255,255,255,0.06)',
     right: -18,
     top: -22,
   },
@@ -975,7 +997,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(167,243,208,0.08)',
+    backgroundColor: dark ? theme.colors.heroGlowBlue : 'rgba(167,243,208,0.08)',
     right: 32,
     bottom: -18,
   },
@@ -984,7 +1006,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: dark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.05)',
     left: 20,
     bottom: 10,
   },
@@ -995,25 +1017,25 @@ const styles = StyleSheet.create({
   headerDateLine: {
     ...typography.style.medium,
     fontSize: 13,
-    color: 'rgba(204,251,241,0.95)',
-    letterSpacing: 0.2,
-    marginBottom: 6,
+    color: theme.colors.heroDate,
+    letterSpacing: 0.3,
+    marginBottom: 8,
     textTransform: 'capitalize',
   },
   headerName: {
     ...typography.style.hero,
-    fontSize: 24,
-    lineHeight: 30,
-    color: '#ffffff',
-    marginBottom: 5,
-    letterSpacing: 0.15,
+    fontSize: dark ? 26 : 24,
+    lineHeight: dark ? 32 : 30,
+    color: theme.colors.heroTitle,
+    marginBottom: 6,
+    letterSpacing: 0.2,
     paddingTop: 1,
   },
   headerSubtitle: {
     ...typography.style.regular,
     fontSize: 13,
-    color: 'rgba(231,249,244,0.9)',
-    lineHeight: 18,
+    color: theme.colors.heroSubtitle,
+    lineHeight: 19,
     maxWidth: width - 72,
   },
   summaryCardsRow: {
@@ -1024,38 +1046,38 @@ const styles = StyleSheet.create({
   },
   summaryCard: {
     flex: 1,
-    borderRadius: 16,
-    paddingVertical: 8,
+    borderRadius: theme.radius.card,
+    paddingVertical: 10,
     paddingHorizontal: 8,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: SOFT_BORDER_COLOR,
+    backgroundColor: dark ? theme.colors.card : theme.colors.surface,
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: borderSubtle,
     alignItems: 'center',
     gap: 4,
-    ...PREMIUM_CARD_SHADOW,
+    ...(dark ? getCardShadowStyle(theme) : PREMIUM_CARD_SHADOW),
   },
   summaryIconWrap: {
     width: 24,
     height: 24,
     borderRadius: 8,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    backgroundColor: theme.colors.elevated,
+    borderWidth: dark ? 0 : 1,
+    borderColor: theme.colors.borderLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
   summaryIcon: {
     fontSize: 13,
-    color: '#64748b',
+    color: theme.colors.muted,
   },
   summaryLabel: {
     fontSize: 9,
     ...typography.style.medium,
-    color: '#708198',
+    color: theme.colors.textSecondary,
   },
   summaryValue: {
     fontSize: 13,
-    color: '#0b1220',
+    color: theme.colors.text,
     ...typography.style.extraBold,
   },
   metricsContainer: {
@@ -1064,11 +1086,11 @@ const styles = StyleSheet.create({
   metricsTitle: {
     fontSize: 19,
     ...typography.style.bold,
-    color: '#0b1220',
+    color: theme.colors.text,
   },
   metricsHint: {
     fontSize: 10,
-    color: '#7b8a9d',
+    color: theme.colors.textSecondary,
     marginTop: 2,
     marginBottom: 10,
     ...typography.style.medium,
@@ -1085,14 +1107,13 @@ const styles = StyleSheet.create({
     width: Math.min(width * 0.42, 172),
     minWidth: 148,
     minHeight: 156,
-    backgroundColor: '#f8fafc',
-    borderRadius: 18,
+    backgroundColor: dark ? theme.colors.elevated : theme.colors.elevated,
+    borderRadius: theme.radius.card,
     padding: 12,
-    borderWidth: 1,
-    borderColor: SOFT_BORDER_COLOR,
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: borderSubtle,
     justifyContent: 'space-between',
-    elevation: 2,
-    ...INTERACTIVE_CARD_SHADOW,
+    ...(dark ? getCardShadowStyle(theme) : { elevation: 2, ...INTERACTIVE_CARD_SHADOW }),
   },
   metricCardHover: {
     elevation: 4,
@@ -1102,7 +1123,7 @@ const styles = StyleSheet.create({
     opacity: 0.97,
   },
   metricCardActive: {
-    borderColor: '#9bc5bb',
+    borderColor: dark ? theme.colors.accentSecondary : '#9bc5bb',
     elevation: 4,
     ...METRIC_ACTIVE_SHADOW_STYLE,
   },
@@ -1133,7 +1154,7 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 9,
     ...typography.style.medium,
-    color: '#64748b',
+    color: theme.colors.muted,
   },
   metricStatusPill: {
     borderRadius: 999,
@@ -1148,14 +1169,14 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: 28,
     ...typography.style.extraBold,
-    color: '#1e5a4a',
+    color: theme.colors.primary,
     marginTop: 1,
     marginBottom: 1,
   },
   metricUnit: {
     fontSize: 10,
     ...typography.style.medium,
-    color: '#8fa0b5',
+    color: theme.colors.muted,
     marginBottom: 3,
   },
   metricQuickStatus: {
@@ -1165,23 +1186,23 @@ const styles = StyleSheet.create({
   },
   metricInsightCard: {
     marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#bae6fd',
-    backgroundColor: '#f0f9ff',
+    borderWidth: dark ? 0 : 1,
+    borderColor: dark ? 'transparent' : '#bae6fd',
+    backgroundColor: theme.colors.elevated,
     borderRadius: 16,
-    padding: 8,
+    padding: 10,
     gap: 2,
-    ...PREMIUM_CARD_SHADOW,
+    ...(dark ? getCardShadowStyle(theme) : PREMIUM_CARD_SHADOW),
   },
   metricInsightTitle: {
     fontSize: 13,
     ...typography.style.bold,
-    color: '#0b1220',
+    color: theme.colors.text,
   },
   metricInsightText: {
     fontSize: 11,
     ...typography.style.regular,
-    color: '#516174',
+    color: theme.colors.textSecondary,
     lineHeight: 15,
   },
   smartInsightsSection: {
@@ -1190,11 +1211,11 @@ const styles = StyleSheet.create({
   smartInsightsTitle: {
     fontSize: 19,
     ...typography.style.bold,
-    color: '#0b1220',
+    color: theme.colors.text,
   },
   smartInsightsHint: {
     fontSize: 10,
-    color: '#7b8a9d',
+    color: theme.colors.textSecondary,
     marginTop: 2,
     marginBottom: 10,
     ...typography.style.medium,
@@ -1217,7 +1238,7 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1234,13 +1255,13 @@ const styles = StyleSheet.create({
   },
   smartInsightText: {
     fontSize: 12,
-    color: '#334155',
+    color: theme.colors.text,
     ...typography.style.regular,
     lineHeight: 17,
   },
   statsSection: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     borderRadius: 14,
     padding: 16,
     marginBottom: 24,
@@ -1256,7 +1277,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: theme.colors.elevated,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -1267,13 +1288,13 @@ const styles = StyleSheet.create({
   statCount: {
     fontSize: 20,
     ...typography.style.extraBold,
-    color: '#0f172a',
+    color: theme.colors.text,
     marginBottom: 2,
   },
   statLabel: {
     fontSize: 11,
     ...typography.style.medium,
-    color: '#64748b',
+    color: theme.colors.muted,
   },
   statDivider: {
     width: 1,
@@ -1292,7 +1313,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 19,
     ...typography.style.bold,
-    color: '#0b1220',
+    color: theme.colors.text,
   },
   sectionBadge: {
     fontSize: 11,
@@ -1304,12 +1325,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   emptyStateContainer: {
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     borderRadius: 18,
     padding: 20,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: SOFT_BORDER_COLOR,
+    borderColor: borderSubtle,
     borderStyle: 'dashed',
     ...PREMIUM_CARD_SHADOW,
   },
@@ -1320,12 +1341,12 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 17,
     ...typography.style.bold,
-    color: '#0b1220',
+    color: theme.colors.text,
     marginBottom: 4,
   },
   emptyStateSubtitle: {
     fontSize: 12,
-    color: '#708198',
+    color: theme.colors.textSecondary,
     ...typography.style.regular,
     textAlign: 'center',
     lineHeight: 18,
@@ -1357,11 +1378,11 @@ const styles = StyleSheet.create({
     top: 28,
     bottom: -16,
     width: 2,
-    backgroundColor: '#dbe5ef',
+    backgroundColor: theme.colors.border,
   },
   logCard: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.colors.surface,
     borderRadius: 18,
     paddingHorizontal: 12,
     paddingVertical: 11,
@@ -1385,26 +1406,26 @@ const styles = StyleSheet.create({
   logDate: {
     fontSize: 14,
     ...typography.style.bold,
-    color: '#0b1220',
+    color: theme.colors.text,
   },
   logTime: {
     fontSize: 11,
     ...typography.style.medium,
-    color: '#7b8a9d',
+    color: theme.colors.textSecondary,
     marginTop: 2,
   },
   logStatusChip: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: theme.colors.pillSuccessBg,
     borderWidth: 1,
     borderColor: '#bbf7d0',
   },
   logStatusText: {
     fontSize: 10,
     ...typography.style.semiBold,
-    color: '#166534',
+    color: theme.colors.avatarText,
   },
   logMetricsGrid: {
     flexDirection: 'row',
@@ -1417,7 +1438,7 @@ const styles = StyleSheet.create({
   },
   logMetricCell: {
     width: '48%',
-    backgroundColor: '#f8fafc',
+    backgroundColor: theme.colors.elevated,
     borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 9,
@@ -1427,7 +1448,7 @@ const styles = StyleSheet.create({
   logMetricLabel: {
     fontSize: 10,
     ...typography.style.medium,
-    color: '#7b8a9d',
+    color: theme.colors.textSecondary,
     marginBottom: 4,
   },
   logMetricValueRow: {
@@ -1438,15 +1459,16 @@ const styles = StyleSheet.create({
   logMetricValue: {
     fontSize: 15,
     ...typography.style.bold,
-    color: '#0b1220',
+    color: theme.colors.text,
   },
   logMetricUnit: {
     fontSize: 10,
     ...typography.style.medium,
-    color: '#8fa0b5',
+    color: theme.colors.muted,
     marginBottom: 1,
   },
   footerSpacing: {
     height: 12,
   },
-})
+  })
+}

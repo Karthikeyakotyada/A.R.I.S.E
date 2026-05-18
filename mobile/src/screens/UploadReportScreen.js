@@ -1,10 +1,8 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   StyleSheet,
   Text,
   View,
-  ScrollView,
-  SafeAreaView,
   TouchableOpacity,
   Pressable,
   Dimensions,
@@ -26,10 +24,10 @@ import {
   updateReportStatus,
 } from '../lib/reportAnalysisService'
 import { isDeviceOnline, toFriendlyError } from '../lib/network'
-import { Card, Heading, PrimaryButton, Screen, Subtle } from '../components/ui'
-import PageHeader from '../components/PageHeader'
-import InlineBanner from '../components/InlineBanner'
+import { Screen } from '../components/ui'
 import { typography } from '../lib/typography'
+import { useTheme } from '../context/ThemeContext'
+import { getCardShadowStyle, isDarkTheme } from '../lib/themeUi'
 
 const { width } = Dimensions.get('window')
 
@@ -43,55 +41,6 @@ const ACCEPTED_TYPES = {
 const MAX_SIZE_MB = 10
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024
 const USE_NATIVE_DRIVER = Platform.OS !== 'web'
-const UPLOAD_CARD_SHADOW_STYLE =
-  Platform.OS === 'web'
-    ? { boxShadow: '0px 20px 38px rgba(15,118,110,0.24), 0px 2px 0px rgba(16,185,129,0.24)' }
-    : {
-        shadowColor: '#0f766e',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.26,
-        shadowRadius: 22,
-      }
-
-const UPLOAD_BUTTON_SHADOW_STYLE =
-  Platform.OS === 'web'
-    ? { boxShadow: '0px 2px 6px rgba(30,90,74,0.25)' }
-    : {}
-
-const UPLOAD_BUTTON_DISABLED_SHADOW_STYLE =
-  Platform.OS === 'web' ? { boxShadow: 'none' } : {}
-
-const INFO_CARD_SHADOW_STYLE =
-  Platform.OS === 'web'
-    ? { boxShadow: '0px 1px 2px rgba(0,0,0,0.05)' }
-    : {}
-
-const UPLOAD_HOVER_GLOW_STYLE =
-  Platform.OS === 'web'
-    ? { boxShadow: '0px 22px 40px rgba(16,185,129,0.24), 0px 0px 0px 1.5px rgba(110,231,183,0.72)' }
-    : {
-        shadowOpacity: 0.3,
-        shadowRadius: 24,
-      }
-
-const UPLOAD_ICON_SHADOW_STYLE =
-  Platform.OS === 'web'
-    ? { boxShadow: '0px 14px 26px rgba(15,118,110,0.30), 0px 0px 0px 1px rgba(110,231,183,0.9)' }
-    : {
-        shadowColor: '#16a34a',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.34,
-        shadowRadius: 18,
-      }
-
-const UPLOAD_INTERACTION_TRANSITION_STYLE =
-  Platform.OS === 'web'
-    ? {
-        transitionProperty: 'transform, box-shadow, background-color, border-color',
-        transitionDuration: '180ms',
-        transitionTimingFunction: 'ease-out',
-      }
-    : {}
 
 function hasDetectedValues(analysis) {
   if (!analysis) return false
@@ -106,6 +55,8 @@ function hasDetectedValues(analysis) {
 }
 
 export default function UploadReportScreen({ navigation }) {
+  const { theme } = useTheme()
+  const styles = useMemo(() => createStyles(theme), [theme])
   const { user } = useAuth()
   const { showMessage } = useDialog()
   const { showToast } = useToast()
@@ -419,12 +370,7 @@ export default function UploadReportScreen({ navigation }) {
   const fileSize = selectedFile ? Math.round((selectedFile.size || 0) / 1024) : 0
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        style={styles.container}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+    <Screen scroll>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerEyebrow}>Reports</Text>
@@ -648,55 +594,91 @@ export default function UploadReportScreen({ navigation }) {
             Need help? Check our documentation or contact support
           </Text>
         </View>
-      </ScrollView>
-    </SafeAreaView>
+    </Screen>
   )
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-  },
+function createStyles(theme) {
+  const dark = isDarkTheme(theme)
+  const uploadCardShadow =
+    Platform.OS === 'web'
+      ? dark
+        ? {
+            boxShadow:
+              '0px 20px 48px rgba(0, 0, 0, 0.45), 0px 0px 28px rgba(39, 225, 193, 0.08), inset 0px 1px 0px rgba(255,255,255,0.04)',
+          }
+        : { boxShadow: '0px 20px 38px rgba(15,118,110,0.24), 0px 2px 0px rgba(16,185,129,0.24)' }
+      : getCardShadowStyle(theme)
+
+  const uploadHoverGlow =
+    Platform.OS === 'web'
+      ? dark
+        ? {
+            boxShadow:
+              '0px 24px 52px rgba(0, 0, 0, 0.5), 0px 0px 32px rgba(39, 225, 193, 0.14), 0px 0px 0px 1.5px rgba(39, 225, 193, 0.35)',
+          }
+        : { boxShadow: '0px 22px 40px rgba(16,185,129,0.24), 0px 0px 0px 1.5px rgba(110,231,183,0.72)' }
+      : { shadowOpacity: 0.38, shadowRadius: 26 }
+
+  const uploadIconShadow =
+    Platform.OS === 'web'
+      ? dark
+        ? {
+            boxShadow:
+              '0px 12px 28px rgba(0, 0, 0, 0.4), 0px 0px 20px rgba(39, 225, 193, 0.2), 0px 0px 0px 1px rgba(39, 225, 193, 0.25)',
+          }
+        : { boxShadow: '0px 14px 26px rgba(15,118,110,0.30), 0px 0px 0px 1px rgba(110,231,183,0.9)' }
+      : {
+          shadowColor: dark ? theme.colors.accentSecondary : '#16a34a',
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: dark ? 0.28 : 0.34,
+          shadowRadius: 18,
+        }
+
+  const webTransition =
+    Platform.OS === 'web'
+      ? {
+          transitionProperty: 'transform, box-shadow, background-color, border-color',
+          transitionDuration: '180ms',
+          transitionTimingFunction: 'ease-out',
+        }
+      : {}
+
+  return StyleSheet.create({
   header: {
-    marginBottom: 28,
+    marginBottom: 24,
   },
   headerEyebrow: {
     fontSize: 12,
     ...typography.style.bold,
-    color: '#64748b',
-    letterSpacing: 0.3,
+    color: theme.colors.textSecondary,
+    letterSpacing: 0.4,
     marginBottom: 4,
+    textTransform: 'uppercase',
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 30,
     ...typography.style.extraBold,
-    color: '#0f172a',
+    color: theme.colors.text,
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#64748b',
+    color: theme.colors.textSecondary,
     ...typography.style.medium,
     lineHeight: 20,
   },
   offlineBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fef2f2',
-    borderRadius: 12,
+    backgroundColor: dark ? 'rgba(220, 38, 38, 0.12)' : '#fef2f2',
+    borderRadius: theme.radius.md,
     padding: 14,
     marginBottom: 16,
     borderLeftWidth: 4,
     borderLeftColor: '#dc2626',
     gap: 12,
+    borderWidth: dark ? 0 : 0,
   },
   offlineIcon: {
     fontSize: 20,
@@ -707,33 +689,33 @@ const styles = StyleSheet.create({
   offlineTitle: {
     fontSize: 13,
     ...typography.style.bold,
-    color: '#7f1d1d',
+    color: dark ? '#FCA5A5' : '#7f1d1d',
     marginBottom: 2,
   },
   offlineSubtitle: {
     fontSize: 12,
-    color: '#991b1b',
+    color: dark ? '#F87171' : '#991b1b',
   },
   messageBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: theme.radius.md,
     padding: 14,
     marginBottom: 16,
     borderLeftWidth: 4,
     gap: 12,
   },
   messageBannerError: {
-    backgroundColor: '#fef2f2',
+    backgroundColor: dark ? 'rgba(220, 38, 38, 0.12)' : '#fef2f2',
     borderLeftColor: '#dc2626',
   },
   messageBannerWarning: {
-    backgroundColor: '#fffbeb',
+    backgroundColor: dark ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
     borderLeftColor: '#f59e0b',
   },
   messageBannerSuccess: {
-    backgroundColor: '#f0fdf4',
-    borderLeftColor: '#10b981',
+    backgroundColor: dark ? 'rgba(39, 225, 193, 0.1)' : '#f0fdf4',
+    borderLeftColor: dark ? theme.colors.accentSecondary : '#10b981',
   },
   messageBannerIcon: {
     fontSize: 18,
@@ -742,34 +724,34 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     ...typography.style.semiBold,
-    color: '#1e293b',
+    color: theme.colors.text,
   },
   uploadSection: {
-    marginBottom: 28,
+    marginBottom: 24,
   },
   uploadCard: {
-    backgroundColor: '#e8f6ee',
-    borderRadius: 18,
-    borderWidth: 2.8,
-    borderColor: '#69c997',
+    backgroundColor: dark ? 'rgba(22, 35, 45, 0.72)' : '#e8f6ee',
+    borderRadius: theme.radius.card,
+    borderWidth: 2,
+    borderColor: dark ? 'rgba(39, 225, 193, 0.35)' : '#69c997',
     borderStyle: 'dashed',
-    paddingVertical: 20,
-    paddingHorizontal: 22,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
     marginBottom: 10,
-    elevation: 7,
+    elevation: dark ? 8 : 7,
     position: 'relative',
     overflow: 'hidden',
-    ...UPLOAD_CARD_SHADOW_STYLE,
-    ...UPLOAD_INTERACTION_TRANSITION_STYLE,
+    ...uploadCardShadow,
+    ...webTransition,
   },
   uploadCardGlowLayer: {
     position: 'absolute',
-    top: -28,
-    right: -16,
-    width: 132,
-    height: 132,
-    borderRadius: 66,
-    backgroundColor: 'rgba(134,239,172,0.28)',
+    top: -32,
+    right: -20,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: dark ? 'rgba(39, 225, 193, 0.12)' : 'rgba(134,239,172,0.28)',
     pointerEvents: 'none',
   },
   uploadCardInnerHighlight: {
@@ -777,78 +759,80 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     top: 0,
-    height: 56,
-    backgroundColor: 'rgba(255,255,255,0.56)',
+    height: 64,
+    backgroundColor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.56)',
     pointerEvents: 'none',
   },
   uploadCardHovered: {
-    backgroundColor: '#dff3e7',
-    borderColor: '#4fbe83',
-    ...UPLOAD_HOVER_GLOW_STYLE,
+    backgroundColor: dark ? 'rgba(22, 35, 45, 0.88)' : '#dff3e7',
+    borderColor: dark ? 'rgba(39, 225, 193, 0.55)' : '#4fbe83',
+    ...uploadHoverGlow,
   },
   uploadCardPressed: {
-    backgroundColor: '#d7efdf',
-    borderColor: '#46ad73',
+    backgroundColor: dark ? 'rgba(17, 28, 36, 0.95)' : '#d7efdf',
+    borderColor: dark ? theme.colors.accentSecondary : '#46ad73',
   },
   uploadCardActive: {
-    backgroundColor: '#daf2e3',
-    borderColor: '#3ea967',
+    backgroundColor: dark ? 'rgba(39, 225, 193, 0.08)' : '#daf2e3',
+    borderColor: dark ? theme.colors.accentSecondary : '#3ea967',
   },
   uploadCardDisabled: {
-    opacity: 0.7,
+    opacity: 0.65,
   },
   uploadPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   uploadIconWrap: {
-    width: 112,
-    height: 112,
-    borderRadius: 30,
-    backgroundColor: '#c9eedb',
-    borderWidth: 1.4,
-    borderColor: '#69c995',
+    width: 104,
+    height: 104,
+    borderRadius: 28,
+    backgroundColor: dark ? 'rgba(39, 225, 193, 0.1)' : '#c9eedb',
+    borderWidth: 1,
+    borderColor: dark ? 'rgba(39, 225, 193, 0.28)' : '#69c995',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
-    ...UPLOAD_ICON_SHADOW_STYLE,
+    ...uploadIconShadow,
   },
   uploadIcon: {
-    fontSize: 42,
+    fontSize: 40,
   },
   uploadTitle: {
     fontSize: 18,
     ...typography.style.extraBold,
-    color: '#0f172a',
+    color: theme.colors.text,
     marginBottom: 5,
+    textAlign: 'center',
   },
   uploadSubtitle: {
     fontSize: 13,
-    color: '#64748b',
+    color: theme.colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 6,
-    opacity: 0.56,
   },
   uploadSupportText: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: theme.colors.muted,
     ...typography.style.semiBold,
   },
   filePreview: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0fdf9',
-    borderRadius: 12,
+    backgroundColor: dark ? 'rgba(15, 26, 34, 0.65)' : '#f0fdf9',
+    borderRadius: theme.radius.md,
     padding: 14,
     gap: 12,
+    borderWidth: dark ? 1 : 0,
+    borderColor: dark ? 'rgba(39, 225, 193, 0.15)' : 'transparent',
   },
   fileIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 10,
-    backgroundColor: '#dbeae8',
+    borderRadius: 12,
+    backgroundColor: dark ? 'rgba(39, 225, 193, 0.12)' : '#dbeae8',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -861,40 +845,41 @@ const styles = StyleSheet.create({
   fileName: {
     fontSize: 14,
     ...typography.style.bold,
-    color: '#0f172a',
+    color: theme.colors.text,
     marginBottom: 2,
   },
   fileDetails: {
     fontSize: 12,
-    color: '#64748b',
+    color: theme.colors.textSecondary,
     ...typography.style.medium,
   },
   fileReplaceHint: {
     marginTop: 4,
     fontSize: 11,
-    color: '#1e5a4a',
+    color: dark ? theme.colors.accentSecondary : '#1e5a4a',
     ...typography.style.semiBold,
   },
   fileCheck: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#10b981',
+    backgroundColor: dark ? theme.colors.accentSecondary : '#10b981',
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkIcon: {
     fontSize: 18,
-    color: '#fff',
+    color: dark ? '#07111A' : '#fff',
     ...typography.style.extraBold,
   },
   progressSection: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.card,
     padding: 18,
     marginBottom: 20,
-    elevation: 2,
-    ...UPLOAD_CARD_SHADOW_STYLE,
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: theme.colors.borderSubtle,
+    ...getCardShadowStyle(theme),
   },
   progressHeader: {
     flexDirection: 'row',
@@ -905,23 +890,23 @@ const styles = StyleSheet.create({
   progressTitle: {
     fontSize: 14,
     ...typography.style.bold,
-    color: '#0f172a',
+    color: theme.colors.text,
   },
   progressPercent: {
     fontSize: 14,
     ...typography.style.extraBold,
-    color: '#1e5a4a',
+    color: dark ? theme.colors.accentSecondary : theme.colors.primary,
   },
   progressBar: {
     height: 8,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
     borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 16,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#1e5a4a',
+    backgroundColor: dark ? theme.colors.accentSecondary : theme.colors.primary,
     borderRadius: 4,
   },
   progressSteps: {
@@ -940,8 +925,8 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#e2e8f0',
-    color: '#94a3b8',
+    backgroundColor: dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
+    color: theme.colors.muted,
     fontSize: 14,
     ...typography.style.bold,
     textAlign: 'center',
@@ -949,45 +934,52 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   progressStepTextDone: {
-    backgroundColor: '#10b981',
-    color: '#fff',
+    backgroundColor: dark ? theme.colors.accentSecondary : '#10b981',
+    color: dark ? '#07111A' : '#fff',
   },
   progressStepLabel: {
     fontSize: 11,
     ...typography.style.semiBold,
-    color: '#64748b',
+    color: theme.colors.textSecondary,
     textAlign: 'center',
   },
   progressConnector: {
     flex: 1,
     height: 1.5,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: dark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
     marginHorizontal: 8,
   },
   buttonGroup: {
     gap: 12,
-    marginBottom: 28,
+    marginBottom: 24,
   },
   uploadButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 62,
-    borderRadius: 12,
-    backgroundColor: '#1e5a4a',
-    elevation: 4,
-    ...UPLOAD_BUTTON_SHADOW_STYLE,
+    height: 58,
+    borderRadius: theme.radius.md,
+    backgroundColor: dark ? theme.colors.primary : '#1e5a4a',
+    elevation: dark ? 6 : 4,
     gap: 8,
+    ...(Platform.OS === 'web'
+      ? {
+          boxShadow: dark
+            ? '0px 8px 24px rgba(39, 225, 193, 0.22)'
+            : '0px 2px 6px rgba(30,90,74,0.25)',
+        }
+      : {}),
   },
   uploadButtonEnabled: {
-    backgroundColor: '#1e5a4a',
-    elevation: 6,
-    ...UPLOAD_HOVER_GLOW_STYLE,
+    backgroundColor: dark ? theme.colors.primary : '#1e5a4a',
+    ...(Platform.OS === 'web' && dark
+      ? { boxShadow: '0px 12px 32px rgba(39, 225, 193, 0.28)' }
+      : {}),
   },
   uploadButtonDisabled: {
-    backgroundColor: '#b8c1cc',
+    backgroundColor: dark ? 'rgba(107, 127, 140, 0.45)' : '#b8c1cc',
     elevation: 0,
-    ...UPLOAD_BUTTON_DISABLED_SHADOW_STYLE,
+    ...(Platform.OS === 'web' ? { boxShadow: 'none' } : {}),
   },
   uploadButtonIcon: {
     fontSize: 18,
@@ -995,23 +987,24 @@ const styles = StyleSheet.create({
   uploadButtonText: {
     fontSize: 16,
     ...typography.style.extraBold,
-    color: '#fff',
+    color: dark ? '#07111A' : '#fff',
     letterSpacing: 0.3,
   },
   infoSection: {
-    gap: 12,
-    marginTop: 10,
-    marginBottom: 28,
+    gap: 10,
+    marginTop: 6,
+    marginBottom: 20,
   },
   infoCard: {
-    backgroundColor: '#f7faf9',
-    borderRadius: 12,
+    backgroundColor: theme.colors.elevated,
+    borderRadius: theme.radius.md,
     paddingVertical: 12,
-    paddingHorizontal: 13,
-    borderLeftWidth: 4,
-    borderLeftColor: '#5a8d7f',
-    elevation: 1,
-    ...INFO_CARD_SHADOW_STYLE,
+    paddingHorizontal: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: dark ? theme.colors.accentSecondary : '#5a8d7f',
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: theme.colors.borderSubtle,
+    ...getCardShadowStyle(theme),
   },
   infoCardHeader: {
     flexDirection: 'row',
@@ -1025,21 +1018,23 @@ const styles = StyleSheet.create({
   infoCardTitle: {
     fontSize: 13,
     ...typography.style.semiBold,
-    color: '#334155',
+    color: theme.colors.text,
   },
   infoCardText: {
     fontSize: 12,
-    color: '#6b7280',
+    color: theme.colors.textSecondary,
     ...typography.style.regular,
-    lineHeight: 16,
+    lineHeight: 17,
   },
   footer: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   footerText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: theme.colors.muted,
     ...typography.style.medium,
+    textAlign: 'center',
   },
-})
+  })
+}

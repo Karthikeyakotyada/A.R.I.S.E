@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
+import AppearanceSelector from '../components/AppearanceSelector'
+import { useTheme } from '../context/ThemeContext'
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
@@ -10,10 +12,13 @@ import { useDialog } from '../context/DialogContext'
 import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabaseClient'
 import { typography } from '../lib/typography'
+import { getCardShadowStyle, isDarkTheme } from '../lib/themeUi'
 
 const AVATAR_BUCKET = 'avatars'
 
 export default function ProfileScreen({ navigation }) {
+  const { theme } = useTheme()
+  const styles = useMemo(() => createStyles(theme), [theme])
   const { user, signOut } = useAuth()
   const { showConfirm, showMessage } = useDialog()
   const { showToast } = useToast()
@@ -365,21 +370,27 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.sectionTitle}>Quick Stats</Text>
         <View style={styles.statsGrid}>
           <Card style={styles.statCard}>
-            <MaterialCommunityIcons name="file-chart-outline" size={20} color="#0284c7" />
+            <View style={[styles.statIconWrap, styles.statIconWrapBlue]}>
+              <MaterialCommunityIcons name="file-chart-outline" size={18} color="#38bdf8" />
+            </View>
             <Text style={styles.statValue}>{statsLoading ? '-' : stats.reports}</Text>
-            <Text style={styles.statLabel}>Reports Uploaded</Text>
+            <Text style={styles.statLabel}>Reports</Text>
           </Card>
 
           <Card style={styles.statCard}>
-            <MaterialCommunityIcons name="heart-pulse" size={20} color="#dc2626" />
+            <View style={[styles.statIconWrap, styles.statIconWrapRed]}>
+              <MaterialCommunityIcons name="heart-pulse" size={18} color="#f87171" />
+            </View>
             <Text style={styles.statValue}>{statsLoading ? '-' : stats.logs}</Text>
-            <Text style={styles.statLabel}>Health Logs</Text>
+            <Text style={styles.statLabel}>Logs</Text>
           </Card>
 
           <Card style={styles.statCard}>
-            <MaterialCommunityIcons name="chart-line" size={20} color="#16a34a" />
+            <View style={[styles.statIconWrap, styles.statIconWrapGreen]}>
+              <MaterialCommunityIcons name="chart-line" size={18} color="#4ade80" />
+            </View>
             <Text style={styles.statValue}>{statsLoading ? '-' : stats.healthScore}</Text>
-            <Text style={styles.statLabel}>Health Score</Text>
+            <Text style={styles.statLabel}>Score</Text>
           </Card>
         </View>
         {statsLoading ? (
@@ -411,6 +422,12 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.healthInfoValue}>{item.value}</Text>
           </View>
         ))}
+      </Card>
+
+      <Card style={styles.appearanceCard}>
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <Subtle style={styles.appearanceHint}>Choose how ARISE looks on this device.</Subtle>
+        <AppearanceSelector />
       </Card>
 
       <Card style={styles.infoCard}>
@@ -542,17 +559,21 @@ export default function ProfileScreen({ navigation }) {
   )
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme) {
+  const dark = isDarkTheme(theme)
+  return StyleSheet.create({
+  appearanceCard: {
+    gap: 10,
+  },
+  appearanceHint: {
+    marginBottom: 4,
+  },
   headerCard: {
-    borderRadius: 18,
+    borderRadius: theme.radius.card,
     padding: 18,
-    borderWidth: 1,
-    borderColor: '#dce9e6',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 5,
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: theme.colors.borderSubtle,
+    ...getCardShadowStyle(theme),
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -599,11 +620,11 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 20,
     ...typography.style.extraBold,
-    color: '#0f172a',
+    color: theme.colors.text,
   },
   email: {
     fontSize: 14,
-    color: '#475569',
+    color: theme.colors.textSecondary,
     ...typography.style.medium,
   },
   joined: {
@@ -617,7 +638,7 @@ const styles = StyleSheet.create({
   editButton: {
     minHeight: 50,
     borderRadius: 14,
-    backgroundColor: '#0b6b63',
+    backgroundColor: theme.colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -633,30 +654,80 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   editButtonText: {
-    color: '#ffffff',
+    color: theme.colors.onPrimary,
     ...typography.style.extraBold,
     fontSize: 15,
   },
   sectionTitle: {
     fontSize: 17,
     ...typography.style.extraBold,
-    color: '#0f172a',
+    color: theme.colors.text,
   },
   statsGrid: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   statCard: {
     flex: 1,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    alignItems: 'flex-start',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.06,
+    minWidth: 0,
+    borderRadius: theme.radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: theme.colors.borderSubtle,
+    ...getCardShadowStyle(theme),
+  },
+  statIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  statIconWrapBlue: {
+    backgroundColor: dark ? 'rgba(56, 189, 248, 0.12)' : 'rgba(2, 132, 199, 0.1)',
+    borderColor: dark ? 'rgba(56, 189, 248, 0.28)' : 'rgba(2, 132, 199, 0.2)',
+    shadowColor: dark ? '#38bdf8' : '#0284c7',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: dark ? 0.35 : 0.15,
     shadowRadius: 10,
-    elevation: 2,
+    elevation: dark ? 3 : 1,
+  },
+  statIconWrapRed: {
+    backgroundColor: dark ? 'rgba(248, 113, 113, 0.12)' : 'rgba(220, 38, 38, 0.08)',
+    borderColor: dark ? 'rgba(248, 113, 113, 0.28)' : 'rgba(220, 38, 38, 0.18)',
+    shadowColor: dark ? '#f87171' : '#dc2626',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: dark ? 0.32 : 0.12,
+    shadowRadius: 10,
+    elevation: dark ? 3 : 1,
+  },
+  statIconWrapGreen: {
+    backgroundColor: dark ? 'rgba(74, 222, 128, 0.12)' : 'rgba(22, 163, 74, 0.1)',
+    borderColor: dark ? 'rgba(74, 222, 128, 0.28)' : 'rgba(22, 163, 74, 0.2)',
+    shadowColor: dark ? '#4ade80' : '#16a34a',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: dark ? 0.32 : 0.12,
+    shadowRadius: 10,
+    elevation: dark ? 3 : 1,
+  },
+  statValue: {
+    fontSize: 20,
+    lineHeight: 24,
+    ...typography.style.extraBold,
+    color: theme.colors.text,
+    textAlign: 'center',
+  },
+  statLabel: {
+    fontSize: 10,
+    ...typography.style.semiBold,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    letterSpacing: 0.2,
   },
   statsLoadingRow: {
     flexDirection: 'row',
@@ -670,15 +741,11 @@ const styles = StyleSheet.create({
     ...typography.style.semiBold,
   },
   healthInfoCard: {
-    borderRadius: 18,
+    borderRadius: theme.radius.card,
     marginTop: 2,
-    borderWidth: 1,
-    borderColor: '#dfe8ee',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: theme.colors.borderSubtle,
+    ...getCardShadowStyle(theme),
   },
   healthInfoRow: {
     flexDirection: 'row',
@@ -689,35 +756,31 @@ const styles = StyleSheet.create({
   },
   healthInfoRowDivider: {
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: theme.colors.borderSubtle,
   },
   healthInfoLabel: {
     fontSize: 14,
     ...typography.style.bold,
-    color: '#475569',
+    color: theme.colors.textSecondary,
   },
   healthInfoValue: {
     flexShrink: 1,
     fontSize: 14,
     ...typography.style.extraBold,
-    color: '#0f172a',
+    color: theme.colors.text,
     textAlign: 'right',
   },
   infoCard: {
-    borderRadius: 18,
+    borderRadius: theme.radius.card,
     marginTop: 2,
-    borderWidth: 1,
-    borderColor: '#dfe8ee',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: theme.colors.borderSubtle,
+    ...getCardShadowStyle(theme),
   },
   infoRow: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: theme.colors.elevated,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: theme.colors.borderLight,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -733,7 +796,7 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 14,
     ...typography.style.bold,
-    color: '#334155',
+    color: theme.colors.text,
   },
   infoValue: {
     fontSize: 14,
@@ -756,7 +819,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#ef4444',
-    backgroundColor: '#fef2f2',
+    backgroundColor: theme.colors.signOutBg,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -977,4 +1040,5 @@ const styles = StyleSheet.create({
     fontSize: 17,
     ...typography.style.medium,
   },
-})
+  })
+}

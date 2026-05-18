@@ -1,6 +1,16 @@
-import { useCallback, useState } from 'react'
-import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  ActivityIndicator,
+  Animated,
+  Linking,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
+import { MaterialCommunityIcons } from '@expo/vector-icons'
 import * as Haptics from 'expo-haptics'
 import { useAuth } from '../context/AuthContext'
 import { useDialog } from '../context/DialogContext'
@@ -8,7 +18,13 @@ import { useToast } from '../context/ToastContext'
 import { supabase } from '../lib/supabaseClient'
 import { RANGES, getStatusForValue } from '../lib/cbcAnalyzer'
 import { formatDate, getStoragePath } from '../lib/helpers'
-import { analyzeExistingReport, inferFileType, REPORT_ANALYSIS_STATUS, REPORT_STATUS_META, resolveReportStatus } from '../lib/reportAnalysisService'
+import {
+  analyzeExistingReport,
+  inferFileType,
+  REPORT_ANALYSIS_STATUS,
+  REPORT_STATUS_META,
+  resolveReportStatus,
+} from '../lib/reportAnalysisService'
 import { isDeviceOnline, toFriendlyError } from '../lib/network'
 import { Card, EmptyState, PrimaryButton, Screen, SkeletonLine, Subtle } from '../components/ui'
 import PageHeader from '../components/PageHeader'
@@ -16,6 +32,15 @@ import AnimatedListItem from '../components/AnimatedListItem'
 import InlineBanner from '../components/InlineBanner'
 import MedicalDisclaimer from '../components/MedicalDisclaimer'
 import { typography } from '../lib/typography'
+import { useTheme } from '../context/ThemeContext'
+import {
+  getCardShadowStyle,
+  getReportStatusBadgeColors,
+  getSeverityPalette,
+  isDarkTheme,
+} from '../lib/themeUi'
+
+const USE_NATIVE_DRIVER = Platform.OS !== 'web'
 
 function hasDetectedValues(analysis) {
   if (!analysis) return false
@@ -60,18 +85,49 @@ function parseAiSummary(summary) {
   return fallback(raw)
 }
 
-function severityColor(severity) {
-  if (severity === 'high') return '#dc2626'
-  if (severity === 'moderate') return '#d97706'
-  if (severity === 'low') return '#0284c7'
-  return '#16a34a'
+function getInsightSeverityStyle(theme, severity) {
+  const dark = isDarkTheme(theme)
+  const key = String(severity || 'normal').toLowerCase()
+  if (key === 'high') {
+    return {
+      bg: dark ? 'rgba(220, 38, 38, 0.14)' : '#FEE2E2',
+      border: dark ? 'rgba(248, 113, 113, 0.28)' : '#fca5a5',
+      text: dark ? '#FCA5A5' : '#b91c1c',
+    }
+  }
+  if (key === 'moderate') {
+    return {
+      bg: dark ? 'rgba(245, 158, 11, 0.12)' : '#FFF3CD',
+      border: dark ? 'rgba(251, 191, 36, 0.28)' : '#fdba74',
+      text: dark ? '#FCD34D' : '#9a3412',
+    }
+  }
+  if (key === 'low') {
+    return {
+      bg: dark ? 'rgba(24, 182, 255, 0.12)' : '#E0F2FE',
+      border: dark ? 'rgba(56, 189, 248, 0.28)' : '#93c5fd',
+      text: dark ? '#7DD3FC' : '#1e40af',
+    }
+  }
+  return {
+    bg: dark ? 'rgba(39, 225, 193, 0.1)' : '#DCFCE7',
+    border: dark ? 'rgba(39, 225, 193, 0.28)' : '#86efac',
+    text: dark ? '#7CEBDC' : '#166534',
+  }
 }
 
-function severityBackgroundColor(severity) {
-  if (severity === 'high') return '#FEE2E2'
-  if (severity === 'moderate') return '#FFF3CD'
-  if (severity === 'low') return '#E0F2FE'
-  return '#DCFCE7'
+function getMetricPalette(theme, status) {
+  if (status === 'normal') return getSeverityPalette(theme, 'normal')
+  if (status === 'high') return getSeverityPalette(theme, 'critical')
+  if (status === 'low') return getSeverityPalette(theme, 'warning')
+  return {
+    bg: theme.colors.elevated,
+    border: theme.colors.borderSubtle,
+    text: theme.colors.muted,
+    value: theme.colors.textSecondary,
+    softBorder: theme.colors.borderSubtle,
+    tint: theme.colors.elevated,
+  }
 }
 
 function formatFieldLabel(field) {
@@ -79,7 +135,7 @@ function formatFieldLabel(field) {
     .replace(/_/g, ' ')
     .split(' ')
     .filter(Boolean)
-    .map((part) => part.toUpperCase())
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ')
 }
 
@@ -104,25 +160,76 @@ function formatFieldValue(field, value, unit) {
   return `${raw}${unit ? ` ${unit}` : ''}`
 }
 
-function Metric({ label, value, field }) {
+function Metric({ label, value, field, theme, styles }) {
   const status = value !== null && value !== undefined ? getStatusForValue(value, field) : 'unknown'
-  const color = status === 'normal' ? '#16a34a' : status === 'low' ? '#f59e0b' : status === 'high' ? '#ef4444' : '#64748b'
+  const palette = getMetricPalette(theme, status)
   const unit = RANGES[field]?.unit || ''
+  const statusLabel = status === 'unknown' ? 'Not detected' : status
 
   return (
-    <View style={styles.metric}>
+    <Pressable
+      style={({ pressed, hovered }) => [
+        styles.metric,
+        {
+          backgroundColor: isDarkTheme(theme) ? palette.tint || palette.bg : palette.bg,
+          borderColor: palette.softBorder,
+        },
+        Platform.OS === 'web' && hovered && styles.metricHovered,
+        pressed && styles.metricPressed,
+      ]}
+    >
       <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={[styles.metricValue, { color }]}>{formatFieldValue(field, value, unit)}</Text>
-      <Subtle>{status === 'unknown' ? 'not detected' : status}</Subtle>
+      <Text style={[styles.metricValue, { color: palette.value }]}>{formatFieldValue(field, value, unit)}</Text>
+      <View style={[styles.metricStatusPill, { borderColor: palette.softBorder }]}>
+        <Text style={[styles.metricStatusText, { color: palette.text }]}>{statusLabel}</Text>
+      </View>
+    </Pressable>
+  )
+}
+
+function ReportStatusBadge({ status, theme, styles }) {
+  const meta = REPORT_STATUS_META[status] || REPORT_STATUS_META.uploaded
+  const colors = getReportStatusBadgeColors(theme, meta.tone)
+
+  return (
+    <View style={[styles.badge, { backgroundColor: colors.bg, borderColor: colors.border }]}>
+      <Text style={[styles.badgeText, { color: colors.text }]}>{meta.label}</Text>
+    </View>
+  )
+}
+
+function LoadingSkeleton({ styles }) {
+  return (
+    <View style={styles.loadingWrap}>
+      <Card style={styles.loadingCard}>
+        <SkeletonLine width="72%" />
+        <SkeletonLine width="40%" />
+        <SkeletonLine width="88%" />
+      </Card>
+      <Card style={styles.loadingCard}>
+        <SkeletonLine width="55%" />
+        <View style={styles.metricsRow}>
+          <View style={styles.metricSkeleton} />
+          <View style={styles.metricSkeleton} />
+        </View>
+        <View style={styles.metricsRow}>
+          <View style={styles.metricSkeleton} />
+          <View style={styles.metricSkeleton} />
+        </View>
+      </Card>
     </View>
   )
 }
 
 export default function ReportViewerScreen({ route, navigation }) {
   const reportId = route?.params?.reportId ?? null
+  const { theme } = useTheme()
+  const styles = useMemo(() => createStyles(theme), [theme])
   const { user } = useAuth()
   const { showConfirm, showMessage } = useDialog()
   const { showToast } = useToast()
+  const contentOpacity = useRef(new Animated.Value(0)).current
+  const insightPulse = useRef(new Animated.Value(0.6)).current
 
   const [report, setReport] = useState(null)
   const [analysis, setAnalysis] = useState(null)
@@ -133,6 +240,9 @@ export default function ReportViewerScreen({ route, navigation }) {
   const [online, setOnline] = useState(true)
 
   const structuredSummary = parseAiSummary(analysis?.ai_summary)
+  const healthScore = Number(analysis?.health_score)
+  const hasHealthScore = Number.isFinite(healthScore)
+
   const pickValue = (...sources) => {
     for (const source of sources) {
       if (source !== null && source !== undefined) return source
@@ -154,6 +264,28 @@ export default function ReportViewerScreen({ route, navigation }) {
   }
 
   const visibleCbcValues = Object.entries(cbcValues).filter(([, value]) => value !== null && value !== undefined)
+
+  useEffect(() => {
+    if (!report || loading) return
+    contentOpacity.setValue(0)
+    Animated.timing(contentOpacity, {
+      toValue: 1,
+      duration: 320,
+      useNativeDriver: USE_NATIVE_DRIVER,
+    }).start()
+  }, [report?.id, loading, contentOpacity])
+
+  useEffect(() => {
+    if (!structuredSummary) return
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(insightPulse, { toValue: 1, duration: 1800, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(insightPulse, { toValue: 0.6, duration: 1800, useNativeDriver: USE_NATIVE_DRIVER }),
+      ])
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [structuredSummary, insightPulse])
 
   const handleOpenOriginalReport = useCallback(async () => {
     const url = report?.file_url
@@ -210,13 +342,11 @@ export default function ReportViewerScreen({ route, navigation }) {
       const latest = analysisData?.[0] ?? null
       setReport(reportData)
       setAnalysis(latest)
-      console.log('[DEBUG] ReportViewer fetched report:', reportData)
-      console.log('[DEBUG] ReportViewer fetched analysis (latest):', latest)
       setStatus(resolveReportStatus(reportData, latest))
     } finally {
       setLoading(false)
     }
-  }, [navigation, reportId, user])
+  }, [navigation, reportId, user, showMessage])
 
   useFocusEffect(
     useCallback(() => {
@@ -334,301 +464,503 @@ export default function ReportViewerScreen({ route, navigation }) {
   if (!report || loading) {
     return (
       <Screen>
-        <Card>
-          <SkeletonLine width="78%" />
-          <SkeletonLine width="48%" />
-          <SkeletonLine width="100%" />
-        </Card>
+        <LoadingSkeleton styles={styles} />
       </Screen>
     )
   }
 
+  const insightSeverity = getInsightSeverityStyle(theme, structuredSummary?.mainInsight?.severity || 'normal')
+
   return (
     <Screen refreshing={loading} onRefresh={fetchData}>
-      <PageHeader
-        eyebrow="Reports"
-        title="Report Details"
-        subtitle={report.file_name}
-        showTopBar={false}
-      />
+      <Animated.View style={{ opacity: contentOpacity }}>
+        <PageHeader
+          eyebrow="Reports"
+          title="Report Details"
+          subtitle={report.file_name}
+          showTopBar={false}
+        />
 
-      {!online ? <InlineBanner tone="warning" message="You're offline or connection is unstable" /> : null}
-      {banner ? <InlineBanner tone={banner.tone} message={banner.message} /> : null}
+        {!online ? <InlineBanner tone="warning" message="You're offline or connection is unstable" /> : null}
+        {banner ? <InlineBanner tone={banner.tone} message={banner.message} /> : null}
 
-      <AnimatedListItem index={0}>
-        <Card>
-        <Text style={styles.fileName}>{report.file_name}</Text>
-        <Subtle>{formatDate(report.uploaded_at)}</Subtle>
-        <View style={styles.statusRow}>
-          <View style={[
-            styles.badge,
-            status === REPORT_ANALYSIS_STATUS.COMPLETE
-              ? styles.badgeSuccess
-              : status === REPORT_ANALYSIS_STATUS.FAILED
-                ? styles.badgeError
-                : status === REPORT_ANALYSIS_STATUS.PENDING
-                  ? styles.badgeWarning
-                  : styles.badgeInfo,
-          ]}>
-            <Text style={styles.badgeText}>{(REPORT_STATUS_META[status] || REPORT_STATUS_META.uploaded).label}</Text>
-          </View>
-          {status === REPORT_ANALYSIS_STATUS.PENDING ? <ActivityIndicator size="small" color="#d97706" /> : null}
-        </View>
+        <AnimatedListItem index={0}>
+          <Card style={styles.metaCard}>
+            <Text style={styles.fileName}>{report.file_name}</Text>
+            <Subtle>{formatDate(report.uploaded_at)}</Subtle>
+            <View style={styles.statusRow}>
+              <ReportStatusBadge status={status} theme={theme} styles={styles} />
+              {status === REPORT_ANALYSIS_STATUS.PENDING ? (
+                <ActivityIndicator size="small" color={theme.colors.accentWarm || '#f59e0b'} />
+              ) : null}
+            </View>
 
-        <PrimaryButton title="Open Original Report" onPress={handleOpenOriginalReport} />
-        <PrimaryButton title={reanalyzing ? 'Re-analyzing...' : 'Run AI Analysis Again'} onPress={handleReanalyze} loading={reanalyzing} disabled={!online} />
-        <PrimaryButton title="Remove Report" onPress={handleDelete} style={{ backgroundColor: '#dc2626' }} />
-        </Card>
-      </AnimatedListItem>
-
-      <AnimatedListItem index={1}>
-        <Card>
-        <Text style={styles.section}>AI Analysis</Text>
-        {status === REPORT_ANALYSIS_STATUS.PENDING ? (
-          <View style={styles.pendingWrap}>
-            <ActivityIndicator size="small" color="#d97706" />
-            <Subtle>Analysis in progress. Pull to refresh after a few seconds.</Subtle>
-          </View>
-        ) : null}
-
-        {status === REPORT_ANALYSIS_STATUS.FAILED ? (
-          <View style={styles.pendingWrap}>
-            <Subtle>Analysis could not find reliable CBC values. Retry with a clear report that includes patient result values.</Subtle>
-            <PrimaryButton
-              title={reanalyzing ? 'Retrying...' : 'Retry AI Analysis'}
-              onPress={handleReanalyze}
-              disabled={reanalyzing || !online}
-              loading={reanalyzing}
-            />
-          </View>
-        ) : null}
-
-        {!analysis && status !== REPORT_ANALYSIS_STATUS.PENDING && status !== REPORT_ANALYSIS_STATUS.FAILED ? (
-          <EmptyState title="No analysis yet" subtitle="Tap Run AI Analysis Again to generate CBC insights for this report." />
-        ) : null}
-
-        {analysis ? (
-          <>
-            <Text style={styles.subSection}>Detected CBC Values</Text>
-            {visibleCbcValues.length > 0 ? (
-              <View style={styles.metricsRow}>
-                {visibleCbcValues.map(([field, value]) => (
-                  <Metric
-                    key={field}
-                    label={formatFieldLabel(field)}
-                    value={value}
-                    field={field}
-                  />
-                ))}
-              </View>
-            ) : (
-              <EmptyState
-                title="No CBC values detected"
-                subtitle="The report data is available, but no analyzable CBC values were found for display."
+            <View style={styles.actionGroup}>
+              <PrimaryButton title="Open Original Report" onPress={handleOpenOriginalReport} />
+              <PrimaryButton
+                title={reanalyzing ? 'Re-analyzing...' : 'Run AI Analysis Again'}
+                onPress={handleReanalyze}
+                loading={reanalyzing}
+                disabled={!online}
               />
-            )}
-          </>
-        ) : null}
+              <PrimaryButton
+                title="Remove Report"
+                onPress={handleDelete}
+                style={styles.dangerButton}
+              />
+            </View>
+          </Card>
+        </AnimatedListItem>
+
+        <AnimatedListItem index={1}>
+          <Card style={styles.analysisCard}>
+            <View style={styles.sectionHeader}>
+              <MaterialCommunityIcons name="brain" size={20} color={theme.colors.primary} />
+              <Text style={styles.section}>AI Analysis</Text>
+            </View>
+
+            {status === REPORT_ANALYSIS_STATUS.PENDING ? (
+              <View style={styles.pendingWrap}>
+                <ActivityIndicator size="small" color={theme.colors.accentWarm || '#f59e0b'} />
+                <Subtle>Analysis in progress. Pull to refresh after a few seconds.</Subtle>
+              </View>
+            ) : null}
+
+            {status === REPORT_ANALYSIS_STATUS.FAILED ? (
+              <View style={styles.pendingWrap}>
+                <Subtle>
+                  Analysis could not find reliable CBC values. Retry with a clear report that includes patient result values.
+                </Subtle>
+                <PrimaryButton
+                  title={reanalyzing ? 'Retrying...' : 'Retry AI Analysis'}
+                  onPress={handleReanalyze}
+                  disabled={reanalyzing || !online}
+                  loading={reanalyzing}
+                />
+              </View>
+            ) : null}
+
+            {!analysis && status !== REPORT_ANALYSIS_STATUS.PENDING && status !== REPORT_ANALYSIS_STATUS.FAILED ? (
+              <EmptyState
+                title="No analysis yet"
+                subtitle="Tap Run AI Analysis Again to generate CBC insights for this report."
+              />
+            ) : null}
+
+            {analysis ? (
+              <>
+                <Text style={styles.subSection}>Detected CBC Values</Text>
+                {visibleCbcValues.length > 0 ? (
+                  <View style={styles.metricsRow}>
+                    {visibleCbcValues.map(([field, value]) => (
+                      <Metric
+                        key={field}
+                        label={formatFieldLabel(field)}
+                        value={value}
+                        field={field}
+                        theme={theme}
+                        styles={styles}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <EmptyState
+                    title="No CBC values detected"
+                    subtitle="The report data is available, but no analyzable CBC values were found for display."
+                  />
+                )}
+              </>
+            ) : null}
+          </Card>
+        </AnimatedListItem>
 
         {structuredSummary ? (
-          <>
-            <Text style={styles.subSection}>Summary</Text>
-            <View style={styles.summaryCard}>
-              <View style={styles.summaryHeaderRow}>
-                <Text style={styles.summaryTitle}>{structuredSummary?.mainInsight?.title || 'Summary'}</Text>
-                <View
-                  style={[
-                    styles.severityBadge,
-                    {
-                      backgroundColor: severityBackgroundColor(structuredSummary?.mainInsight?.severity || 'normal'),
-                      borderColor: `${severityColor(structuredSummary?.mainInsight?.severity || 'normal')}66`,
-                    },
-                  ]}
-                >
-                  <Text style={[styles.severityText, { color: severityColor(structuredSummary?.mainInsight?.severity || 'normal') }]}>
-                    {String(structuredSummary?.mainInsight?.severity || 'normal').toUpperCase()}
-                  </Text>
+          <AnimatedListItem index={2}>
+            <Animated.View
+              style={[
+                styles.insightPanel,
+                {
+                  opacity: insightPulse.interpolate({
+                    inputRange: [0.6, 1],
+                    outputRange: [0.97, 1],
+                  }),
+                },
+              ]}
+            >
+              <View style={styles.insightGlow} pointerEvents="none" />
+              <View style={styles.insightHeader}>
+                <View style={styles.insightTitleRow}>
+                  <MaterialCommunityIcons name="sparkles" size={18} color={theme.colors.accentSecondary} />
+                  <Text style={styles.insightTitle}>AI Health Insights</Text>
+                </View>
+                <View style={styles.insightBadges}>
+                  {hasHealthScore ? (
+                    <View style={styles.scoreBadge}>
+                      <Text style={styles.scoreBadgeLabel}>Score</Text>
+                      <Text style={styles.scoreBadgeValue}>{healthScore}</Text>
+                    </View>
+                  ) : null}
+                  <View
+                    style={[
+                      styles.severityBadge,
+                      {
+                        backgroundColor: insightSeverity.bg,
+                        borderColor: insightSeverity.border,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.severityText, { color: insightSeverity.text }]}>
+                      {String(structuredSummary?.mainInsight?.severity || 'normal').toUpperCase()}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
-              <Subtle>{structuredSummary?.mainInsight?.message || ''}</Subtle>
+              <Text style={styles.summaryHeadline}>
+                {structuredSummary?.mainInsight?.title || 'Summary'}
+              </Text>
+              <Text style={styles.summaryMessage}>
+                {structuredSummary?.mainInsight?.message || ''}
+              </Text>
 
               {Array.isArray(structuredSummary?.bullets) && structuredSummary.bullets.length > 0 ? (
                 <View style={styles.bulletsWrap}>
                   {structuredSummary.bullets.map((bullet, idx) => (
-                    <Text key={`${bullet}-${idx}`} style={styles.bulletText}>{`• ${bullet}`}</Text>
-                  ))}
-                </View>
-              ) : null}
-
-              {Array.isArray(structuredSummary?.suggestions) && structuredSummary.suggestions.length > 0 ? (
-                <View style={styles.suggestionsWrap}>
-                  {structuredSummary.suggestions.map((item, idx) => (
-                    <View key={`${item?.title || 'suggestion'}-${idx}`} style={styles.suggestionItem}>
-                      <Text style={styles.suggestionTitle}>{item?.title}</Text>
-                      <Subtle>{item?.description}</Subtle>
+                    <View key={`${bullet}-${idx}`} style={styles.bulletRow}>
+                      <View style={styles.bulletDot} />
+                      <Text style={styles.bulletText}>{bullet}</Text>
                     </View>
                   ))}
                 </View>
               ) : null}
 
-              {structuredSummary?.confidenceNote ? (
-                <Subtle style={styles.confidenceNote}>{structuredSummary.confidenceNote}</Subtle>
+              {Array.isArray(structuredSummary?.suggestions) && structuredSummary.suggestions.length > 0 ? (
+                <>
+                  <Text style={styles.recommendationsTitle}>Recommendations</Text>
+                  <View style={styles.suggestionsWrap}>
+                    {structuredSummary.suggestions.map((item, idx) => (
+                      <View key={`${item?.title || 'suggestion'}-${idx}`} style={styles.suggestionItem}>
+                        <MaterialCommunityIcons
+                          name="lightbulb-on-outline"
+                          size={16}
+                          color={theme.colors.accentSecondary}
+                          style={styles.suggestionIcon}
+                        />
+                        <View style={styles.suggestionContent}>
+                          <Text style={styles.suggestionTitle}>{item?.title}</Text>
+                          <Text style={styles.suggestionDescription}>{item?.description}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                </>
               ) : null}
-            </View>
-          </>
+
+              {structuredSummary?.confidenceNote ? (
+                <Text style={styles.confidenceNote}>{structuredSummary.confidenceNote}</Text>
+              ) : null}
+            </Animated.View>
+          </AnimatedListItem>
         ) : null}
 
-        <MedicalDisclaimer />
-        </Card>
-      </AnimatedListItem>
+        <AnimatedListItem index={structuredSummary ? 3 : 2}>
+          <MedicalDisclaimer />
+        </AnimatedListItem>
+      </Animated.View>
     </Screen>
   )
 }
 
-const styles = StyleSheet.create({
-  fileName: {
-    fontSize: 18,
-    ...typography.style.extraBold,
-    color: '#0f172a',
-  },
-  section: {
-    fontSize: 16,
-    ...typography.style.extraBold,
-    color: '#0f172a',
-    marginBottom: 6,
-  },
-  subSection: {
-    fontSize: 13,
-    color: '#475569',
-    ...typography.style.extraBold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-    marginTop: 8,
-    marginBottom: 2,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  badge: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  badgeText: {
-    ...typography.style.extraBold,
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  badgeSuccess: {
-    backgroundColor: '#dcfce7',
-    borderColor: '#86efac',
-  },
-  badgeError: {
-    backgroundColor: '#fee2e2',
-    borderColor: '#fca5a5',
-  },
-  badgeWarning: {
-    backgroundColor: '#ffedd5',
-    borderColor: '#fdba74',
-  },
-  badgeInfo: {
-    backgroundColor: '#e0f2fe',
-    borderColor: '#93c5fd',
-  },
-  metric: {
-    width: '48%',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 8,
-    gap: 2,
-  },
-  metricLabel: {
-    color: '#475569',
-    ...typography.style.bold,
-    fontSize: 12,
-  },
-  metricValue: {
-    ...typography.style.extraBold,
-    fontSize: 16,
-  },
-  score: {
-    ...typography.style.extraBold,
-    color: '#0f172a',
-    marginTop: 8,
-  },
-  pendingWrap: {
-    gap: 8,
-  },
-  summaryCard: {
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 10,
-    gap: 8,
-    backgroundColor: '#f8fafc',
-  },
-  summaryHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 8,
-  },
-  summaryTitle: {
-    ...typography.style.extraBold,
-    color: '#0f172a',
-    fontSize: 14,
-    flex: 1,
-  },
-  severityBadge: {
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-  },
-  severityText: {
-    ...typography.style.extraBold,
-    fontSize: 10,
-    letterSpacing: 0.3,
-  },
-  bulletsWrap: {
-    gap: 4,
-  },
-  bulletText: {
-    color: '#334155',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  suggestionsWrap: {
-    gap: 6,
-  },
-  suggestionItem: {
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 10,
-    padding: 8,
-    gap: 2,
-    backgroundColor: '#ffffff',
-  },
-  suggestionTitle: {
-    ...typography.style.bold,
-    color: '#0f172a',
-    fontSize: 13,
-  },
-  confidenceNote: {
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
-})
+function createStyles(theme) {
+  const dark = isDarkTheme(theme)
+  return StyleSheet.create({
+    loadingWrap: {
+      gap: 14,
+    },
+    loadingCard: {
+      gap: 10,
+    },
+    metricSkeleton: {
+      width: '48%',
+      height: 88,
+      borderRadius: theme.radius.md,
+      backgroundColor: theme.colors.skeleton,
+    },
+    metaCard: {
+      gap: 10,
+      marginBottom: 4,
+    },
+    analysisCard: {
+      gap: 12,
+      marginBottom: 4,
+    },
+    actionGroup: {
+      gap: 10,
+      marginTop: 6,
+    },
+    dangerButton: {
+      backgroundColor: dark ? 'rgba(239, 68, 68, 0.88)' : '#dc2626',
+    },
+    fileName: {
+      fontSize: 18,
+      ...typography.style.extraBold,
+      color: theme.colors.text,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 2,
+    },
+    section: {
+      fontSize: 17,
+      ...typography.style.extraBold,
+      color: theme.colors.text,
+    },
+    subSection: {
+      fontSize: 11,
+      color: theme.colors.textSecondary,
+      ...typography.style.extraBold,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginTop: 4,
+      marginBottom: 10,
+    },
+    metricsRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    statusRow: {
+      flexDirection: 'row',
+      gap: 8,
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    badge: {
+      borderWidth: 1,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+    },
+    badgeText: {
+      ...typography.style.extraBold,
+      fontSize: 11,
+      textTransform: 'uppercase',
+      letterSpacing: 0.3,
+    },
+    metric: {
+      width: '48%',
+      flexGrow: 1,
+      minWidth: 148,
+      borderWidth: dark ? 1 : 1,
+      borderRadius: theme.radius.md,
+      paddingVertical: 12,
+      paddingHorizontal: 12,
+      gap: 4,
+      ...getCardShadowStyle(theme),
+    },
+    metricHovered: {
+      ...(Platform.OS === 'web' && dark
+        ? { boxShadow: '0px 14px 36px rgba(0,0,0,0.45), 0px 0px 20px rgba(39, 225, 193, 0.1)' }
+        : {}),
+      transform: [{ translateY: -2 }],
+    },
+    metricPressed: {
+      opacity: 0.92,
+    },
+    metricLabel: {
+      color: theme.colors.textSecondary,
+      ...typography.style.semiBold,
+      fontSize: 11,
+      letterSpacing: 0.2,
+    },
+    metricValue: {
+      ...typography.style.extraBold,
+      fontSize: 22,
+      lineHeight: 26,
+      marginTop: 2,
+    },
+    metricStatusPill: {
+      alignSelf: 'flex-start',
+      marginTop: 6,
+      borderWidth: 1,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      backgroundColor: dark ? 'rgba(17, 28, 36, 0.5)' : 'rgba(255,255,255,0.6)',
+    },
+    metricStatusText: {
+      fontSize: 10,
+      ...typography.style.bold,
+      textTransform: 'capitalize',
+    },
+    pendingWrap: {
+      gap: 10,
+      paddingVertical: 4,
+    },
+    insightPanel: {
+      marginBottom: 14,
+      borderRadius: theme.radius.card,
+      padding: 16,
+      gap: 12,
+      backgroundColor: dark ? 'rgba(22, 35, 45, 0.85)' : theme.colors.card,
+      borderWidth: dark ? 1 : theme.ui.cardBorderWidth,
+      borderColor: dark ? 'rgba(39, 225, 193, 0.18)' : theme.colors.borderSubtle,
+      overflow: 'hidden',
+      position: 'relative',
+      ...getCardShadowStyle(theme),
+      ...(Platform.OS === 'web' && dark
+        ? { boxShadow: '0px 16px 40px rgba(0,0,0,0.42), 0px 0px 28px rgba(39, 225, 193, 0.06)' }
+        : {}),
+    },
+    insightGlow: {
+      position: 'absolute',
+      top: -40,
+      right: -30,
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: dark ? 'rgba(39, 225, 193, 0.08)' : 'rgba(16, 185, 129, 0.06)',
+      pointerEvents: 'none',
+    },
+    insightHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      gap: 10,
+    },
+    insightTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flex: 1,
+    },
+    insightTitle: {
+      ...typography.style.extraBold,
+      fontSize: 16,
+      color: theme.colors.text,
+    },
+    insightBadges: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexShrink: 0,
+    },
+    scoreBadge: {
+      alignItems: 'center',
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: dark ? 'rgba(24, 182, 255, 0.12)' : '#e0f2fe',
+      borderWidth: 1,
+      borderColor: dark ? 'rgba(56, 189, 248, 0.28)' : '#93c5fd',
+    },
+    scoreBadgeLabel: {
+      fontSize: 9,
+      ...typography.style.bold,
+      color: dark ? '#7DD3FC' : '#1e40af',
+      textTransform: 'uppercase',
+      letterSpacing: 0.3,
+    },
+    scoreBadgeValue: {
+      fontSize: 18,
+      ...typography.style.extraBold,
+      color: dark ? '#BAE6FD' : '#0369a1',
+      lineHeight: 22,
+    },
+    severityBadge: {
+      borderWidth: 1,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
+    },
+    severityText: {
+      ...typography.style.extraBold,
+      fontSize: 10,
+      letterSpacing: 0.3,
+    },
+    summaryHeadline: {
+      ...typography.style.extraBold,
+      fontSize: 15,
+      color: theme.colors.text,
+      marginTop: 2,
+    },
+    summaryMessage: {
+      fontSize: 14,
+      lineHeight: 21,
+      color: theme.colors.textSecondary,
+      ...typography.style.regular,
+    },
+    bulletsWrap: {
+      gap: 8,
+      marginTop: 2,
+    },
+    bulletRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+    },
+    bulletDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: theme.colors.accentSecondary,
+      marginTop: 7,
+    },
+    bulletText: {
+      flex: 1,
+      color: theme.colors.text,
+      fontSize: 13,
+      lineHeight: 19,
+      ...typography.style.medium,
+    },
+    recommendationsTitle: {
+      fontSize: 11,
+      ...typography.style.extraBold,
+      color: theme.colors.textSecondary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginTop: 4,
+    },
+    suggestionsWrap: {
+      gap: 8,
+    },
+    suggestionItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 10,
+      borderWidth: dark ? 0 : 1,
+      borderColor: theme.colors.borderSubtle,
+      borderRadius: theme.radius.md,
+      padding: 12,
+      backgroundColor: dark ? 'rgba(15, 26, 34, 0.65)' : theme.colors.elevated,
+      ...getCardShadowStyle(theme),
+    },
+    suggestionIcon: {
+      marginTop: 2,
+    },
+    suggestionContent: {
+      flex: 1,
+      gap: 3,
+    },
+    suggestionTitle: {
+      ...typography.style.bold,
+      color: theme.colors.text,
+      fontSize: 13,
+    },
+    suggestionDescription: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: theme.colors.textSecondary,
+      ...typography.style.regular,
+    },
+    confidenceNote: {
+      marginTop: 4,
+      fontSize: 11,
+      fontStyle: 'italic',
+      color: theme.colors.muted,
+      lineHeight: 16,
+    },
+  })
+}

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import { Animated, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useTheme } from './ThemeContext'
 import { typography } from '../lib/typography'
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web'
@@ -10,6 +11,8 @@ const DialogContext = createContext({
 })
 
 export function DialogProvider({ children }) {
+  const { theme } = useTheme()
+  const styles = useMemo(() => createStyles(theme), [theme])
   const [dialog, setDialog] = useState(null)
   const opacity = useRef(new Animated.Value(0)).current
   const scale = useRef(new Animated.Value(0.96)).current
@@ -131,67 +134,69 @@ export function useDialog() {
   return context
 }
 
-const styles = StyleSheet.create({
-  backdropHost: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 18,
-  },
-  backdrop: {
-    position: 'absolute',
-    inset: 0,
-    backgroundColor: 'rgba(2,6,23,0.35)',
-  },
-  card: {
-    width: '100%',
-    borderRadius: 16,
-    borderWidth: 1,
-    backgroundColor: '#fff',
-    padding: 16,
-    gap: 12,
-  },
-  info: { borderColor: '#bfdbfe' },
-  warning: { borderColor: '#fdba74' },
-  success: { borderColor: '#86efac' },
-  error: { borderColor: '#fca5a5' },
-  title: {
-    ...typography.style.extraBold,
-    fontSize: 18,
-    color: '#0f172a',
-  },
-  message: {
-    color: '#334155',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  secondaryBtn: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  secondaryText: {
-    ...typography.style.bold,
-    color: '#334155',
-  },
-  primaryBtn: {
-    flex: 1,
-    minHeight: 42,
-    borderRadius: 12,
-    backgroundColor: '#0f766e',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  primaryText: {
-    ...typography.style.bold,
-    color: '#fff',
-  },
-})
+function createStyles(theme) {
+  return StyleSheet.create({
+    backdropHost: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 18,
+    },
+    backdrop: {
+      position: 'absolute',
+      inset: 0,
+      backgroundColor: theme.colors.overlay,
+    },
+    card: {
+      width: '100%',
+      borderRadius: 16,
+      borderWidth: 1,
+      backgroundColor: theme.colors.card,
+      padding: 16,
+      gap: 12,
+    },
+    info: { borderColor: '#bfdbfe' },
+    warning: { borderColor: '#fdba74' },
+    success: { borderColor: '#86efac' },
+    error: { borderColor: '#fca5a5' },
+    title: {
+      ...typography.style.extraBold,
+      fontSize: 18,
+      color: theme.colors.text,
+    },
+    message: {
+      color: theme.colors.textSecondary,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    row: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    secondaryBtn: {
+      flex: 1,
+      minHeight: 42,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    secondaryText: {
+      ...typography.style.bold,
+      color: theme.colors.text,
+    },
+    primaryBtn: {
+      flex: 1,
+      minHeight: 42,
+      borderRadius: 12,
+      backgroundColor: theme.colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    primaryText: {
+      ...typography.style.bold,
+      color: theme.colors.onPrimary,
+    },
+  })
+}

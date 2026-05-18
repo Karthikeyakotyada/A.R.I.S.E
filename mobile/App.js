@@ -1,15 +1,16 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { StatusBar } from 'expo-status-bar'
-import { NavigationContainer, DefaultTheme } from '@react-navigation/native'
-import { LogBox, Platform, Text, TextInput } from 'react-native'
+import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native'
+import { LogBox, Text, TextInput } from 'react-native'
 import * as SplashScreen from 'expo-splash-screen'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { AuthProvider } from './src/context/AuthContext'
 import { DialogProvider } from './src/context/DialogContext'
+import { ThemeProvider, useTheme } from './src/context/ThemeContext'
 import { ToastProvider } from './src/context/ToastContext'
 import RootNavigator from './src/navigation/RootNavigator'
 import AppErrorBoundary from './src/components/AppErrorBoundary'
-import { theme } from './src/lib/theme'
+import { buildNavigationTheme } from './src/lib/theme'
 import { typography } from './src/lib/typography'
 import { logEnvDiagnostics } from './src/lib/env'
 
@@ -41,45 +42,61 @@ if (global.ErrorUtils?.setGlobalHandler) {
   })
 }
 
-const navTheme = {
-  ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    primary: theme.colors.primary,
-    background: theme.colors.bg,
-    card: theme.colors.surface,
-    text: theme.colors.text,
-    border: theme.colors.border,
-  },
+function AppNavigation() {
+  const { theme, isDark, isReady } = useTheme()
+
+  const navTheme = useMemo(() => {
+    const base = isDark ? DarkTheme : DefaultTheme
+    const app = buildNavigationTheme(theme)
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        ...app.colors,
+      },
+    }
+  }, [theme, isDark])
+
+  useEffect(() => {
+    if (isReady) {
+      SplashScreen.hideAsync().catch(() => {})
+    }
+  }, [isReady])
+
+  if (!isReady) {
+    return null
+  }
+
+  return (
+    <NavigationContainer
+      theme={navTheme}
+      onUnhandledAction={(action) => {
+        console.error('[ARISE] Navigation unhandled action:', action)
+      }}
+      onStateChange={(state) => {
+        const routeName = state?.routes?.[state.index || 0]?.name || 'unknown'
+        console.log('[ARISE] Navigation route:', routeName)
+      }}
+    >
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <RootNavigator />
+    </NavigationContainer>
+  )
 }
 
 export default function App() {
-  useEffect(() => {
-    SplashScreen.hideAsync().catch(() => {})
-  }, [])
-
   return (
     <AppErrorBoundary>
       <SafeAreaProvider>
-        <ToastProvider>
-          <DialogProvider>
-            <AuthProvider>
-              <NavigationContainer
-                theme={navTheme}
-                onUnhandledAction={(action) => {
-                  console.error('[ARISE] Navigation unhandled action:', action)
-                }}
-                onStateChange={(state) => {
-                  const routeName = state?.routes?.[state.index || 0]?.name || 'unknown'
-                  console.log('[ARISE] Navigation route:', routeName)
-                }}
-              >
-                <StatusBar style="dark" />
-                <RootNavigator />
-              </NavigationContainer>
-            </AuthProvider>
-          </DialogProvider>
-        </ToastProvider>
+        <ThemeProvider>
+          <ToastProvider>
+            <DialogProvider>
+              <AuthProvider>
+                <AppNavigation />
+              </AuthProvider>
+            </DialogProvider>
+          </ToastProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </AppErrorBoundary>
   )

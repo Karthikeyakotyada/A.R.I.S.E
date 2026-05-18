@@ -1,12 +1,14 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabaseClient'
-import { theme } from '../lib/theme'
+import { useTheme } from '../context/ThemeContext'
 import { typography } from '../lib/typography'
 
 export default function PageHeader({ eyebrow, title, subtitle, right, showTopBar = true }) {
+  const { theme } = useTheme()
+  const styles = useMemo(() => createStyles(theme), [theme])
   const navigation = useNavigation()
   const { user } = useAuth()
   const [profileAvatarUrl, setProfileAvatarUrl] = useState(null)
@@ -121,89 +123,91 @@ export default function PageHeader({ eyebrow, title, subtitle, right, showTopBar
   )
 }
 
-const styles = StyleSheet.create({
-  wrap: {
-    gap: 8,
-  },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 10,
-  },
-  brandingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  logoWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#e8f6f3',
-    borderWidth: 1,
-    borderColor: '#cfe8e3',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  logoImage: {
-    width: 26,
-    height: 26,
-  },
-  brandName: {
-    color: '#0f172a',
-    fontSize: 15,
-    ...typography.style.extraBold,
-    letterSpacing: 0.2,
-  },
-  brandSubtitle: {
-    color: '#64748b',
-    fontSize: 12,
-    ...typography.style.semiBold,
-  },
-  avatarWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#d7e6e2',
-    backgroundColor: '#f3faf8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  avatarPressed: {
-    opacity: 0.84,
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarText: {
-    color: '#0f766e',
-    fontSize: 14,
-    ...typography.style.extraBold,
-  },
-  left: {
-    flex: 1,
-    gap: 3,
-  },
-  eyebrow: {
-    color: theme.colors.primary,
-    fontSize: 11,
-    ...typography.style.extraBold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
-  },
-  title: {
-    fontSize: 28,
-    ...typography.style.extraBold,
-    color: theme.colors.text,
-  },
-  subtitle: {
-    color: theme.colors.muted,
-    fontSize: 14,
-    lineHeight: 21,
-  },
-})
+function createStyles(theme) {
+  return StyleSheet.create({
+    wrap: {
+      gap: 8,
+    },
+    topRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: 10,
+    },
+    brandingLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    logoWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: theme.colors.logoBg,
+      borderWidth: 1,
+      borderColor: theme.colors.logoBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    logoImage: {
+      width: 26,
+      height: 26,
+    },
+    brandName: {
+      color: theme.colors.text,
+      fontSize: 15,
+      ...typography.style.extraBold,
+      letterSpacing: 0.2,
+    },
+    brandSubtitle: {
+      color: theme.colors.muted,
+      fontSize: 12,
+      ...typography.style.semiBold,
+    },
+    avatarWrap: {
+      width: 42,
+      height: 42,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.soft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    avatarPressed: {
+      opacity: 0.84,
+    },
+    avatarImage: {
+      width: '100%',
+      height: '100%',
+    },
+    avatarText: {
+      color: theme.colors.primary,
+      fontSize: 14,
+      ...typography.style.extraBold,
+    },
+    left: {
+      flex: 1,
+      gap: 3,
+    },
+    eyebrow: {
+      color: theme.colors.primary,
+      fontSize: 11,
+      ...typography.style.extraBold,
+      textTransform: 'uppercase',
+      letterSpacing: 0.7,
+    },
+    title: {
+      fontSize: 28,
+      ...typography.style.extraBold,
+      color: theme.colors.text,
+    },
+    subtitle: {
+      color: theme.colors.muted,
+      fontSize: 14,
+      lineHeight: 21,
+    },
+  })
+}

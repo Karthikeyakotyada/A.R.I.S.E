@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Platform, Text, View } from 'react-native'
 import { useAuth } from '../context/AuthContext'
 import { finalizeOAuthRedirect } from '../lib/supabaseClient'
+import { useTheme } from '../context/ThemeContext'
 import { typography } from '../lib/typography'
 
 export default function AuthCallbackScreen() {
+  const { theme } = useTheme()
   const { user } = useAuth()
   const [message, setMessage] = useState('Finishing sign-in...')
 
@@ -52,9 +54,16 @@ export default function AuthCallbackScreen() {
   }, [user])
 
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc' }}>
-      <ActivityIndicator size="large" color="#0f9d58" />
-      <Text style={{ marginTop: 12, color: '#334155', ...typography.style.semiBold }}>{message}</Text>
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.background,
+      }}
+    >
+      <ActivityIndicator size="large" color={theme.colors.primary} />
+      <Text style={{ marginTop: 12, color: theme.colors.text, ...typography.style.semiBold }}>{message}</Text>
     </View>
   )
 }

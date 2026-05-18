@@ -13,11 +13,12 @@ import AnimatedListItem from '../components/AnimatedListItem'
 import InlineBanner from '../components/InlineBanner'
 import PageHeader from '../components/PageHeader'
 import { typography } from '../lib/typography'
+import { useTheme } from '../context/ThemeContext'
+import { getCardShadowStyle, isDarkTheme } from '../lib/themeUi'
 
 const WEB_INPUT_RESET_STYLE = Platform.OS === 'web'
   ? { outlineStyle: 'none' }
   : {}
-const INPUT_PLACEHOLDER_COLOR = '#9aa8b5'
 
 function toNullableNumber(value) {
   if (value === '' || value === null || value === undefined) return null
@@ -57,6 +58,8 @@ function validateTemperature(value) {
 }
 
 export default function HealthLogsScreen() {
+  const { theme } = useTheme()
+  const styles = useMemo(() => createStyles(theme), [theme])
   const { user } = useAuth()
   const { showMessage } = useDialog()
   const { showToast } = useToast()
@@ -311,7 +314,7 @@ export default function HealthLogsScreen() {
           <MaterialCommunityIcons name="heart-pulse" size={20} color="#dc2626" style={styles.fieldIcon} />
           <View style={styles.fieldContent}>
             <Text style={styles.fieldLabel}>Heart Rate</Text>
-            <TextInput value={heartRate} onChangeText={setHeartRate} style={[styles.input, errors.heartRate && styles.inputError]} placeholder="Heart Rate (bpm)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} keyboardType="numeric" />
+            <TextInput value={heartRate} onChangeText={setHeartRate} style={[styles.input, errors.heartRate && styles.inputError]} placeholder="Heart Rate (bpm)" placeholderTextColor={theme.colors.muted} keyboardType="numeric" />
             {errors.heartRate ? <Text style={styles.errorText}>{errors.heartRate}</Text> : null}
           </View>
         </View>
@@ -319,7 +322,7 @@ export default function HealthLogsScreen() {
           <MaterialCommunityIcons name="heart-box-outline" size={20} color="#0284c7" style={styles.fieldIcon} />
           <View style={styles.fieldContent}>
             <Text style={styles.fieldLabel}>Blood Pressure</Text>
-            <TextInput value={bloodPressure} onChangeText={setBloodPressure} style={[styles.input, errors.bloodPressure && styles.inputError]} placeholder="Blood Pressure (e.g. 120/80)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} />
+            <TextInput value={bloodPressure} onChangeText={setBloodPressure} style={[styles.input, errors.bloodPressure && styles.inputError]} placeholder="Blood Pressure (e.g. 120/80)" placeholderTextColor={theme.colors.muted} />
             {errors.bloodPressure ? <Text style={styles.errorText}>{errors.bloodPressure}</Text> : null}
           </View>
         </View>
@@ -327,7 +330,7 @@ export default function HealthLogsScreen() {
           <MaterialCommunityIcons name="water" size={20} color="#16a34a" style={styles.fieldIcon} />
           <View style={styles.fieldContent}>
             <Text style={styles.fieldLabel}>Blood Sugar</Text>
-            <TextInput value={bloodSugar} onChangeText={setBloodSugar} style={[styles.input, errors.bloodSugar && styles.inputError]} placeholder="Blood Sugar (mg/dL)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} keyboardType="numeric" />
+            <TextInput value={bloodSugar} onChangeText={setBloodSugar} style={[styles.input, errors.bloodSugar && styles.inputError]} placeholder="Blood Sugar (mg/dL)" placeholderTextColor={theme.colors.muted} keyboardType="numeric" />
             {errors.bloodSugar ? <Text style={styles.errorText}>{errors.bloodSugar}</Text> : null}
           </View>
         </View>
@@ -335,7 +338,7 @@ export default function HealthLogsScreen() {
           <MaterialCommunityIcons name="thermometer" size={20} color="#f59e0b" style={styles.fieldIcon} />
           <View style={styles.fieldContent}>
             <Text style={styles.fieldLabel}>Temperature</Text>
-            <TextInput value={temperature} onChangeText={setTemperature} style={[styles.input, errors.temperature && styles.inputError]} placeholder="Temperature (F)" placeholderTextColor={INPUT_PLACEHOLDER_COLOR} keyboardType="decimal-pad" />
+            <TextInput value={temperature} onChangeText={setTemperature} style={[styles.input, errors.temperature && styles.inputError]} placeholder="Temperature (F)" placeholderTextColor={theme.colors.muted} keyboardType="decimal-pad" />
             {errors.temperature ? <Text style={styles.errorText}>{errors.temperature}</Text> : null}
           </View>
         </View>
@@ -348,7 +351,7 @@ export default function HealthLogsScreen() {
               onChangeText={setSymptoms}
               style={[styles.input, styles.textarea]}
               placeholder="Symptoms"
-              placeholderTextColor={INPUT_PLACEHOLDER_COLOR}
+              placeholderTextColor={theme.colors.muted}
               multiline
             />
           </View>
@@ -386,14 +389,14 @@ export default function HealthLogsScreen() {
               <View style={styles.row}>
                 <Text style={styles.rowTitle}>{formatDate(item.created_at)}</Text>
                 <View style={styles.vitalsLine}>
-                  <Subtle>HR: {item.heart_rate ?? '-'}</Subtle>
-                  <Subtle>BP: {item.blood_pressure ?? '-'}</Subtle>
+                  <Text style={styles.vitalText}>HR: {item.heart_rate ?? '-'}</Text>
+                  <Text style={styles.vitalText}>BP: {item.blood_pressure ?? '-'}</Text>
                 </View>
                 <View style={styles.vitalsLine}>
-                  <Subtle>Sugar: {item.blood_sugar ?? '-'}</Subtle>
-                  <Subtle>Temp: {item.temperature ?? '-'}</Subtle>
+                  <Text style={styles.vitalText}>Sugar: {item.blood_sugar ?? '-'}</Text>
+                  <Text style={styles.vitalText}>Temp: {item.temperature ?? '-'}</Text>
                 </View>
-                {item.symptoms ? <Subtle>Symptoms: {item.symptoms}</Subtle> : null}
+                {item.symptoms ? <Text style={styles.symptomsText}>Symptoms: {item.symptoms}</Text> : null}
               </View>
             </AnimatedListItem>
           )}
@@ -408,12 +411,14 @@ export default function HealthLogsScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme) {
+  const dark = isDarkTheme(theme)
+  return StyleSheet.create({
   heroBlock: {
-    backgroundColor: '#ecfdf5',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    borderRadius: 18,
+    backgroundColor: dark ? theme.colors.elevated : '#ecfdf5',
+    borderWidth: dark ? 0 : 1,
+    borderColor: dark ? 'transparent' : '#bbf7d0',
+    borderRadius: theme.radius.card,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 14,
@@ -421,13 +426,20 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: 24,
     ...typography.style.extraBold,
-    color: '#14532d',
+    color: dark ? theme.colors.text : '#14532d',
   },
   heroSubtitle: {
     marginTop: 2,
     fontSize: 13,
     ...typography.style.semiBold,
-    color: '#2f6650',
+    color: dark ? theme.colors.textSecondary : '#2f6650',
+  },
+  quickStatsHint: {
+    fontSize: 12,
+    ...typography.style.medium,
+    color: theme.colors.textSecondary,
+    marginBottom: 10,
+    lineHeight: 17,
   },
   quickStatsSection: {
     marginBottom: 16,
@@ -435,7 +447,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.style.extraBold,
     fontSize: 16,
-    color: '#0f172a',
+    color: theme.colors.text,
     marginBottom: 10,
   },
   statsGrid: {
@@ -445,17 +457,13 @@ const styles = StyleSheet.create({
   },
   statCard: {
     width: '48%',
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#dbe7e4',
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.md,
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: theme.colors.borderSubtle,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    shadowColor: '#0b1f15',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
+    ...getCardShadowStyle(theme),
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
@@ -465,30 +473,27 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 17,
     ...typography.style.extraBold,
-    color: '#0f172a',
+    color: theme.colors.text,
   },
   statLabel: {
     fontSize: 11,
-    ...typography.style.bold,
-    color: '#64748b',
+    ...typography.style.semiBold,
+    color: dark ? theme.colors.textSecondary : theme.colors.muted,
     marginTop: 1,
+    textAlign: 'center',
   },
   trendArrow: {
     fontSize: 14,
     ...typography.style.bold,
   },
   mainCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#d6e4e1',
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.card,
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: theme.colors.borderSubtle,
     padding: 16,
     marginBottom: 16,
-    shadowColor: '#0b1f15',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.09,
-    shadowRadius: 16,
-    elevation: 4,
+    ...getCardShadowStyle(theme),
   },
   mainHeader: {
     marginBottom: 12,
@@ -497,7 +502,7 @@ const styles = StyleSheet.create({
   mainTitle: {
     ...typography.style.extraBold,
     fontSize: 20,
-    color: '#0f172a',
+    color: theme.colors.text,
   },
   historyCard: {
     borderRadius: 18,
@@ -506,15 +511,15 @@ const styles = StyleSheet.create({
   historyTitle: {
     ...typography.style.extraBold,
     fontSize: 19,
-    color: '#0f172a',
+    color: theme.colors.text,
   },
   fieldWrap: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    borderWidth: 1,
-    borderColor: '#e4eeeb',
+    borderWidth: dark ? 0 : 1,
+    borderColor: theme.colors.borderSubtle,
     borderRadius: 14,
-    backgroundColor: '#fdfefe',
+    backgroundColor: theme.colors.elevated,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 12,
@@ -530,18 +535,18 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 12,
     ...typography.style.extraBold,
-    color: '#334155',
-    marginBottom: 1,
+    color: dark ? theme.colors.text : theme.colors.textSecondary,
+    marginBottom: 4,
   },
   input: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e8efed',
+    backgroundColor: theme.colors.inputBg,
+    borderWidth: dark ? 0 : 1,
+    borderColor: theme.colors.inputBorder,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    color: '#0f172a',
+    color: theme.colors.inputText,
     fontSize: 15,
     ...WEB_INPUT_RESET_STYLE,
   },
@@ -587,20 +592,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   row: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 14,
-    padding: 13,
+    borderWidth: theme.ui.cardBorderWidth,
+    borderColor: theme.colors.borderSubtle,
+    borderRadius: theme.radius.md,
+    padding: 14,
     marginTop: 10,
-    backgroundColor: '#fcfffe',
-    gap: 5,
+    backgroundColor: dark ? theme.colors.elevated : theme.colors.card,
+    gap: 6,
+    ...getCardShadowStyle(theme),
   },
   rowTitle: {
-    ...typography.style.bold,
-    color: '#1e293b',
+    ...typography.style.extraBold,
+    fontSize: 14,
+    color: theme.colors.text,
+    marginBottom: 2,
   },
   vitalsLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 8,
   },
-})
+  vitalText: {
+    flex: 1,
+    fontSize: 13,
+    ...typography.style.medium,
+    color: dark ? '#C5D4DC' : theme.colors.textSecondary,
+    lineHeight: 18,
+  },
+  symptomsText: {
+    fontSize: 13,
+    ...typography.style.regular,
+    color: theme.colors.textSecondary,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  })
+}

@@ -1,11 +1,14 @@
-import { ActivityIndicator, Platform, Text, View } from 'react-native'
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native'
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs'
+import { BlurView } from 'expo-blur'
+import { LinearGradient } from 'expo-linear-gradient'
 import { Ionicons } from '@expo/vector-icons'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../context/AuthContext'
-import { theme } from '../lib/theme'
+import { useTheme } from '../context/ThemeContext'
 import { typography } from '../lib/typography'
+import { getFloatingTabShadow } from '../lib/themeUi'
 import LoginScreen from '../screens/LoginScreen'
 import SignupScreen from '../screens/SignupScreen'
 import DashboardScreen from '../screens/DashboardScreen'
@@ -21,36 +24,57 @@ import AuthCallbackScreen from '../screens/AuthCallbackScreen'
 const Stack = createNativeStackNavigator()
 const Tab = createBottomTabNavigator()
 
-const TAB_ACTIVE = theme.colors.primary
-const TAB_INACTIVE = '#9aacb5'
-const FLOATING_TAB_HEIGHT = 62
-const FLOATING_TAB_RADIUS = 30
-const FLOATING_TAB_MARGIN_H = 16
-
-const FLOATING_TAB_SHADOW =
-  Platform.OS === 'web'
-    ? { boxShadow: '0px 10px 28px rgba(15, 23, 42, 0.1), 0px 2px 8px rgba(15, 23, 42, 0.05)' }
-    : Platform.OS === 'ios'
-      ? {
-          shadowColor: '#0f172a',
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.1,
-          shadowRadius: 18,
-        }
-      : { elevation: 10 }
+const FLOATING_TAB_HEIGHT = 64
+const FLOATING_TAB_MARGIN_H = 18
 
 function FloatingTabBarBackground() {
+  const { theme, isDark } = useTheme()
+  const radius = theme.radius.tab
+
+  if (isDark && Platform.OS !== 'web') {
+    return (
+      <View style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
+        <BlurView
+          intensity={Platform.OS === 'ios' ? 48 : 72}
+          tint="dark"
+          style={StyleSheet.absoluteFill}
+        />
+        <LinearGradient
+          colors={['rgba(22, 35, 45, 0.55)', 'rgba(11, 23, 34, 0.88)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            borderRadius: radius,
+            borderWidth: 1,
+            borderColor: theme.colors.tabBarBorder,
+          }}
+        />
+      </View>
+    )
+  }
+
   return (
     <View
       style={{
         flex: 1,
-        borderRadius: FLOATING_TAB_RADIUS,
-        backgroundColor: theme.colors.surface,
-        borderWidth: 1,
-        borderColor: 'rgba(214, 228, 225, 0.75)',
+        borderRadius: radius,
+        backgroundColor: isDark ? theme.colors.tabBarBg : theme.colors.surface,
+        borderWidth: isDark ? 1 : 1,
+        borderColor: theme.colors.tabBarBorder,
         overflow: 'hidden',
       }}
-    />
+    >
+      {isDark ? (
+        <LinearGradient
+          colors={['rgba(22, 35, 45, 0.92)', 'rgba(11, 23, 34, 0.96)']}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+    </View>
   )
 }
 
@@ -60,16 +84,17 @@ function tabIcon(name, color, focused) {
 
 function AppTabs() {
   const insets = useSafeAreaInsets()
+  const { theme, isDark } = useTheme()
+  const tabRadius = theme.radius.tab
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'web' ? 12 : 8)
-  const tabBarBottom = bottomInset + 6
-  const sceneBottomPad = tabBarBottom + FLOATING_TAB_HEIGHT + 14
+  const tabBarBottom = bottomInset + 8
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: TAB_ACTIVE,
-        tabBarInactiveTintColor: TAB_INACTIVE,
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.tabInactive,
         tabBarShowLabel: true,
         tabBarLabelStyle: {
           ...typography.style.semiBold,
@@ -90,16 +115,15 @@ function AppTabs() {
           right: FLOATING_TAB_MARGIN_H,
           bottom: tabBarBottom,
           height: FLOATING_TAB_HEIGHT,
-          borderRadius: FLOATING_TAB_RADIUS,
+          borderRadius: tabRadius,
           backgroundColor: 'transparent',
           borderTopWidth: 0,
           paddingTop: 6,
           paddingBottom: Platform.OS === 'ios' ? 8 : 6,
-          ...FLOATING_TAB_SHADOW,
+          ...getFloatingTabShadow(theme),
         },
         sceneContainerStyle: {
-          backgroundColor: theme.colors.bg,
-          paddingBottom: sceneBottomPad,
+          backgroundColor: theme.colors.background,
         },
       }}
     >
@@ -133,12 +157,13 @@ function AppTabs() {
 }
 
 function AuthStack() {
+  const { theme } = useTheme()
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#ffffff' },
+        headerStyle: { backgroundColor: theme.colors.surface },
         headerShadowVisible: false,
-        headerTitleStyle: { ...typography.style.extraBold, color: '#0f172a' },
+        headerTitleStyle: { ...typography.style.extraBold, color: theme.colors.text },
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
@@ -148,16 +173,27 @@ function AuthStack() {
 }
 
 function LoadingSplash() {
+  const { theme } = useTheme()
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.bg }}>
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.colors.background,
+      }}
+    >
       <ActivityIndicator size="large" color={theme.colors.primary} />
-      <Text style={{ marginTop: 10, color: '#64748b', ...typography.style.semiBold }}>Loading ARISE...</Text>
+      <Text style={{ marginTop: 10, color: theme.colors.muted, ...typography.style.semiBold }}>
+        Loading ARISE...
+      </Text>
     </View>
   )
 }
 
 export default function RootNavigator() {
   const { user, loading } = useAuth()
+  const { theme } = useTheme()
 
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const { pathname } = window.location
@@ -177,9 +213,9 @@ export default function RootNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#ffffff' },
+        headerStyle: { backgroundColor: theme.colors.surface },
         headerShadowVisible: false,
-        headerTitleStyle: { ...typography.style.extraBold, color: '#0f172a' },
+        headerTitleStyle: { ...typography.style.extraBold, color: theme.colors.text },
       }}
     >
       <Stack.Screen name="Home" component={AppTabs} options={{ headerShown: false }} />
