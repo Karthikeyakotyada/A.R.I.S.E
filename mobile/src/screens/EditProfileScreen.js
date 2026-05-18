@@ -109,7 +109,7 @@ export default function EditProfileScreen({ navigation }) {
   }
 
   return (
-    <Screen>
+    <Screen tabBarInset={false}>
       <Card>
         <Text style={styles.title}>Edit Profile</Text>
         <Subtle>Update your personal information and health basics.</Subtle>

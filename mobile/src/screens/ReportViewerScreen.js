@@ -139,6 +139,17 @@ function formatFieldLabel(field) {
     .join(' ')
 }
 
+function safeDisplayText(value) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return ''
+  }
+}
+
 function formatFieldValue(field, value, unit) {
   const n = Number(value)
   if (!Number.isFinite(n) || n <= 0) return 'Not found'
@@ -356,7 +367,7 @@ export default function ReportViewerScreen({ route, navigation }) {
 
   if (!reportId) {
     return (
-      <Screen>
+      <Screen tabBarInset={false}>
         <Card>
           <EmptyState
             title="Missing Report"
@@ -463,7 +474,7 @@ export default function ReportViewerScreen({ route, navigation }) {
 
   if (!report || loading) {
     return (
-      <Screen>
+      <Screen tabBarInset={false}>
         <LoadingSkeleton styles={styles} />
       </Screen>
     )
@@ -472,7 +483,7 @@ export default function ReportViewerScreen({ route, navigation }) {
   const insightSeverity = getInsightSeverityStyle(theme, structuredSummary?.mainInsight?.severity || 'normal')
 
   return (
-    <Screen refreshing={loading} onRefresh={fetchData}>
+    <Screen refreshing={loading} onRefresh={fetchData} tabBarInset={false}>
       <Animated.View style={{ opacity: contentOpacity }}>
         <PageHeader
           eyebrow="Reports"
@@ -590,7 +601,7 @@ export default function ReportViewerScreen({ route, navigation }) {
               <View style={styles.insightGlow} pointerEvents="none" />
               <View style={styles.insightHeader}>
                 <View style={styles.insightTitleRow}>
-                  <MaterialCommunityIcons name="sparkles" size={18} color={theme.colors.accentSecondary} />
+                  <MaterialCommunityIcons name="creation" size={18} color={theme.colors.accentSecondary} />
                   <Text style={styles.insightTitle}>AI Health Insights</Text>
                 </View>
                 <View style={styles.insightBadges}>
@@ -620,7 +631,7 @@ export default function ReportViewerScreen({ route, navigation }) {
                 {structuredSummary?.mainInsight?.title || 'Summary'}
               </Text>
               <Text style={styles.summaryMessage}>
-                {structuredSummary?.mainInsight?.message || ''}
+                {safeDisplayText(structuredSummary?.mainInsight?.message)}
               </Text>
 
               {Array.isArray(structuredSummary?.bullets) && structuredSummary.bullets.length > 0 ? (
@@ -628,7 +639,7 @@ export default function ReportViewerScreen({ route, navigation }) {
                   {structuredSummary.bullets.map((bullet, idx) => (
                     <View key={`${bullet}-${idx}`} style={styles.bulletRow}>
                       <View style={styles.bulletDot} />
-                      <Text style={styles.bulletText}>{bullet}</Text>
+                      <Text style={styles.bulletText}>{safeDisplayText(bullet)}</Text>
                     </View>
                   ))}
                 </View>
@@ -647,8 +658,8 @@ export default function ReportViewerScreen({ route, navigation }) {
                           style={styles.suggestionIcon}
                         />
                         <View style={styles.suggestionContent}>
-                          <Text style={styles.suggestionTitle}>{item?.title}</Text>
-                          <Text style={styles.suggestionDescription}>{item?.description}</Text>
+                          <Text style={styles.suggestionTitle}>{safeDisplayText(item?.title)}</Text>
+                          <Text style={styles.suggestionDescription}>{safeDisplayText(item?.description)}</Text>
                         </View>
                       </View>
                     ))}
@@ -657,7 +668,7 @@ export default function ReportViewerScreen({ route, navigation }) {
               ) : null}
 
               {structuredSummary?.confidenceNote ? (
-                <Text style={styles.confidenceNote}>{structuredSummary.confidenceNote}</Text>
+                <Text style={styles.confidenceNote}>{safeDisplayText(structuredSummary.confidenceNote)}</Text>
               ) : null}
             </Animated.View>
           </AnimatedListItem>

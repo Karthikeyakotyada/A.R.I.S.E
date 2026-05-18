@@ -2,10 +2,9 @@ import { useEffect, useMemo, useRef } from 'react'
 import { ActivityIndicator, Animated, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 import { useTheme } from '../context/ThemeContext'
 import { typography } from '../lib/typography'
-import { getScrollBottomPadding } from '../lib/navLayout'
+import { getScrollBottomPadding, useSafeBottomTabBarHeight } from '../lib/navLayout'
 import { getCardShadowStyle, getScreenBackgroundColors, isDarkTheme } from '../lib/themeUi'
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web'
@@ -157,11 +156,19 @@ function ScreenBackdrop({ theme }) {
   )
 }
 
-export function Screen({ children, scroll = true, refreshing = false, onRefresh, contentBottomPadding }) {
+export function Screen({
+  children,
+  scroll = true,
+  refreshing = false,
+  onRefresh,
+  contentBottomPadding,
+  /** Set false on root-stack screens (Report Viewer, Edit Profile) — avoids tab bar context. */
+  tabBarInset = true,
+}) {
   const { theme } = useTheme()
   const styles = useMemo(() => createStyles(theme), [theme])
   const insets = useSafeAreaInsets()
-  const tabBarHeight = useBottomTabBarHeight()
+  const tabBarHeight = tabBarInset ? useSafeBottomTabBarHeight() : 0
   const scrollBottomPadding =
     contentBottomPadding ?? getScrollBottomPadding(insets, tabBarHeight)
   const scrollContentStyle = useMemo(

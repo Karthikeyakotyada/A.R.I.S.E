@@ -107,7 +107,7 @@ export default function AnalysisHistoryScreen({ navigation }) {
   )
 
   return (
-    <Screen refreshing={loading} onRefresh={fetchHistory}>
+    <Screen refreshing={loading} onRefresh={fetchHistory} tabBarInset={false}>
       <PageHeader
         eyebrow="Reports"
         title="Analysis History"
